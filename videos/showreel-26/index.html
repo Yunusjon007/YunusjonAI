@@ -1,0 +1,1237 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>Showreel 26</title>
+    <script src="vendor/gsap.min.js"></script>
+    <script src="beats.js"></script>
+    <style>
+      :root {
+        --bg: #0d0c0b;
+        --fg: #f3eee7;
+        --accent: #ff4b1f;
+        --muted: #9a918a;
+        --pad: 72px;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: var(--bg);
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: "JetBrains Mono", monospace;
+      }
+      .blk {
+        display: block;
+      }
+      .mono {
+        font-family: "JetBrains Mono", monospace;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.04em;
+      }
+      .gothic {
+        font-family: "League Gothic", sans-serif;
+        font-weight: 400;
+        text-transform: uppercase;
+        letter-spacing: -0.01em;
+        white-space: nowrap;
+      }
+      .archivo {
+        font-family: "Archivo Black", sans-serif;
+        font-weight: 400;
+        text-transform: uppercase;
+        letter-spacing: -0.035em;
+        white-space: nowrap;
+      }
+      #shake,
+      .scene,
+      .layer {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .scene {
+        overflow: hidden;
+        background: var(--bg);
+      }
+      #s1 {
+        z-index: 1;
+      }
+      #s2 {
+        z-index: 2;
+        opacity: 0;
+      }
+      #s3 {
+        z-index: 3;
+        opacity: 0;
+      }
+      #s4 {
+        z-index: 4;
+        opacity: 0;
+      }
+      #s5 {
+        z-index: 5;
+        opacity: 0;
+      }
+      #s6 {
+        z-index: 6;
+        opacity: 0;
+      }
+      .glow {
+        position: absolute;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(255, 75, 31, 0.34) 0%, rgba(255, 75, 31, 0.1) 40%, rgba(255, 75, 31, 0) 70%);
+      }
+
+      /* ---------- HUD (never shakes) ---------- */
+      #hud {
+        position: absolute;
+        inset: 0;
+        z-index: 80;
+        color: var(--fg);
+        pointer-events: none;
+      }
+      .hud-row {
+        position: absolute;
+        left: var(--pad);
+        right: var(--pad);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 26px;
+      }
+      #hud-top {
+        top: 64px;
+      }
+      #hud-bottom {
+        bottom: 60px;
+      }
+      #hud-tc {
+        font-size: 30px;
+      }
+      .rec {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--accent);
+        margin-right: 14px;
+        vertical-align: 1px;
+      }
+      #hud-track {
+        position: absolute;
+        left: var(--pad);
+        right: var(--pad);
+        bottom: 118px;
+        height: 4px;
+        background: rgba(154, 145, 138, 0.35);
+      }
+      #hud-fill {
+        width: 100%;
+        height: 100%;
+        background: var(--accent);
+        transform-origin: left center;
+      }
+      .crop {
+        position: absolute;
+        width: 44px;
+        height: 44px;
+        border-color: currentColor;
+        border-style: solid;
+        border-width: 0;
+      }
+      .crop.tl {
+        top: 28px;
+        left: 28px;
+        border-top-width: 3px;
+        border-left-width: 3px;
+      }
+      .crop.tr {
+        top: 28px;
+        right: 28px;
+        border-top-width: 3px;
+        border-right-width: 3px;
+      }
+      .crop.bl {
+        bottom: 28px;
+        left: 28px;
+        border-bottom-width: 3px;
+        border-left-width: 3px;
+      }
+      .crop.br {
+        bottom: 28px;
+        right: 28px;
+        border-bottom-width: 3px;
+        border-right-width: 3px;
+      }
+
+      /* ---------- S1 — the drop ---------- */
+      #s1-flood {
+        position: absolute;
+        inset: 0;
+        background: var(--accent);
+        opacity: 0;
+      }
+      #s1-dot-wrap {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #s1-dot {
+        width: 96px;
+        height: 96px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+      #s1-content {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: var(--bg);
+      }
+      .s1-title-wrap {
+        position: relative;
+        display: grid;
+      }
+      .s1-title {
+        grid-area: 1 / 1;
+        font-size: 520px;
+        line-height: 0.84;
+        text-align: center;
+      }
+      .s1-ghost {
+        color: var(--fg);
+        opacity: 0;
+      }
+      .s1-line {
+        display: block;
+      }
+      .ltr-mask {
+        display: inline-block;
+        overflow: hidden;
+        vertical-align: top;
+        padding: 0 2px;
+      }
+      .ltr {
+        display: inline-block;
+      }
+      #s1-sticker {
+        margin-top: 36px;
+        display: flex;
+        align-items: center;
+        gap: 28px;
+      }
+      #s1-26 {
+        background: var(--bg);
+        color: var(--accent);
+        font-size: 128px;
+        line-height: 1;
+        padding: 14px 30px 20px;
+      }
+      #s1-tag {
+        font-size: 30px;
+        line-height: 1.45;
+        color: var(--bg);
+        font-weight: 700;
+      }
+      .marquee {
+        position: absolute;
+        left: 0;
+        white-space: nowrap;
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--bg);
+      }
+      #s1-mq-a {
+        top: 180px;
+      }
+      #s1-mq-b {
+        bottom: 200px;
+      }
+
+      /* ---------- S2 — native language ---------- */
+      #s2-glow {
+        width: 1300px;
+        height: 1300px;
+        left: -110px;
+        top: 310px;
+      }
+      #s2-ghost {
+        position: absolute;
+        right: -40px;
+        bottom: 150px;
+        font-size: 900px;
+        line-height: 0.8;
+        color: transparent;
+        -webkit-text-stroke: 3px rgba(243, 238, 231, 0.16);
+      }
+      #s2-words {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+      }
+      .w {
+        grid-area: 1 / 1;
+        opacity: 0;
+        line-height: 0.9;
+      }
+      #w-motion {
+        font-size: 196px;
+      }
+      #w-is {
+        font-size: 700px;
+        color: var(--accent);
+      }
+      #w-my {
+        font-size: 500px;
+      }
+      #w-native {
+        font-size: 184px;
+        perspective: 900px;
+      }
+      #w-native .flip {
+        display: inline-block;
+        transform-origin: 50% 100%;
+      }
+      #w-language {
+        font-size: 300px;
+      }
+      #s2-stack {
+        position: absolute;
+        left: var(--pad);
+        right: var(--pad);
+        top: 0;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      .st {
+        font-size: 300px;
+        line-height: 0.86;
+        opacity: 0;
+      }
+      .st-accent {
+        color: var(--accent);
+      }
+      .st-outline {
+        color: transparent;
+        -webkit-text-stroke: 4px var(--fg);
+      }
+      #s2-underline {
+        width: 100%;
+        height: 18px;
+        margin-top: 26px;
+        background: var(--accent);
+        transform-origin: left center;
+      }
+      #s2-metro {
+        position: absolute;
+        left: var(--pad);
+        bottom: 220px;
+        display: flex;
+        gap: 18px;
+      }
+      #s2-metro i {
+        display: block;
+        width: 10px;
+        height: 44px;
+        background: var(--accent);
+        opacity: 0.25;
+      }
+      #blinds {
+        position: absolute;
+        inset: 0;
+        z-index: 60;
+        display: flex;
+        pointer-events: none;
+      }
+      #blinds i {
+        display: block;
+        flex: 1;
+        height: 100%;
+        background: var(--accent);
+      }
+
+      /* ---------- S3 — form ---------- */
+      #s3-grid {
+        position: absolute;
+        left: 85px;
+        top: 240px;
+        width: 910px;
+        display: grid;
+        grid-template-columns: repeat(6, 130px);
+        grid-auto-rows: 130px;
+        gap: 26px;
+      }
+      .tile {
+        position: relative;
+        border: 3px solid rgba(243, 238, 231, 0.2);
+        border-radius: 18px;
+        overflow: hidden;
+      }
+      .tile i {
+        position: absolute;
+        inset: 0;
+        background: var(--accent);
+        opacity: 0;
+      }
+      #s3-hero-wrap {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 571px;
+        height: 560px;
+        display: flex;
+        justify-content: center;
+      }
+      #s3-hero {
+        width: 560px;
+        height: 560px;
+        background: var(--accent);
+      }
+      #s3-orbit-wrap {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 481px;
+        height: 740px;
+        display: flex;
+        justify-content: center;
+      }
+      #s3-orbit {
+        width: 740px;
+        height: 740px;
+        border-radius: 50%;
+        border: 3px dashed rgba(243, 238, 231, 0.45);
+      }
+      #s3-code {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 1200px;
+        text-align: center;
+        font-size: 40px;
+        font-weight: 700;
+        color: var(--fg);
+        display: flex;
+        justify-content: center;
+      }
+      #s3-code span {
+        background: var(--bg);
+        padding: 14px 28px;
+        border: 3px solid rgba(243, 238, 231, 0.3);
+        border-radius: 999px;
+      }
+      #s3-code b {
+        color: var(--accent);
+      }
+      #s3-caption {
+        position: absolute;
+        left: var(--pad);
+        bottom: 200px;
+        font-size: 200px;
+        line-height: 1;
+      }
+
+      /* ---------- S4 — depth ---------- */
+      #s4-glow {
+        width: 1500px;
+        height: 1500px;
+        left: -210px;
+        top: 160px;
+      }
+      #s4-stage-wrap {
+        position: absolute;
+        inset: 0;
+        perspective: 1500px;
+        perspective-origin: 50% 46%;
+      }
+      #s4-stage {
+        position: absolute;
+        left: 540px;
+        top: 890px;
+        width: 0;
+        height: 0;
+        transform-style: preserve-3d;
+      }
+      .ring {
+        position: absolute;
+        left: 0;
+        width: 0;
+        height: 0;
+        transform-style: preserve-3d;
+      }
+      .ring span {
+        position: absolute;
+        left: -40px;
+        top: -100px;
+        width: 80px;
+        height: 200px;
+        font-size: 200px;
+        line-height: 200px;
+        text-align: center;
+        backface-visibility: hidden;
+      }
+      .ring span.back {
+        opacity: 0.22;
+      }
+      .ring.accent span {
+        color: var(--accent);
+      }
+      #s4-readout {
+        position: absolute;
+        left: var(--pad);
+        bottom: 190px;
+        font-size: 26px;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+      #s4-readout b {
+        color: var(--fg);
+        font-weight: 700;
+      }
+
+      /* ---------- S5 — timing ---------- */
+      #s5-inner {
+        position: absolute;
+        inset: 0;
+      }
+      #s5-head {
+        position: absolute;
+        left: var(--pad);
+        top: 180px;
+        font-size: 170px;
+        line-height: 1;
+      }
+      #s5-head em {
+        font-style: normal;
+        color: var(--accent);
+      }
+      #s5-graph {
+        position: absolute;
+        left: var(--pad);
+        top: 540px;
+        width: 936px;
+        height: 480px;
+      }
+      .lane {
+        position: absolute;
+        left: var(--pad);
+        width: 936px;
+        height: 110px;
+      }
+      .lane-label {
+        font-size: 28px;
+        color: var(--muted);
+        overflow: hidden;
+        white-space: nowrap;
+      }
+      .lane.hot .lane-label {
+        color: var(--fg);
+        font-weight: 700;
+      }
+      .lane-track {
+        position: absolute;
+        left: 0;
+        top: 70px;
+        width: 100%;
+        height: 3px;
+        background: rgba(243, 238, 231, 0.24);
+        transform-origin: left center;
+      }
+      .lane-dot {
+        position: absolute;
+        left: 0;
+        top: 50px;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: var(--fg);
+      }
+      .lane.hot .lane-dot {
+        background: var(--accent);
+      }
+      #s5-foot {
+        position: absolute;
+        left: var(--pad);
+        top: 1712px;
+        font-size: 30px;
+        font-weight: 700;
+        color: var(--accent);
+      }
+
+      /* ---------- S6 — written in code ---------- */
+      #s6-glow {
+        width: 900px;
+        height: 900px;
+        left: 420px;
+        top: 760px;
+        opacity: 0;
+      }
+      #s6-stack {
+        position: absolute;
+        left: var(--pad);
+        right: var(--pad);
+        top: 0;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      .s6-l {
+        font-size: 214px;
+        line-height: 0.88;
+      }
+      .s6-dim {
+        color: var(--fg);
+      }
+      .s6-code {
+        font-size: 176px;
+        line-height: 1.02;
+      }
+      #s6-l3 {
+        color: var(--accent);
+        margin-top: 30px;
+      }
+      .ch {
+        opacity: 0;
+      }
+      #s6-period {
+        display: inline-block;
+        width: 46px;
+        height: 46px;
+        margin-left: 12px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+      #s6-credit {
+        position: absolute;
+        left: var(--pad);
+        right: var(--pad);
+        bottom: 190px;
+        font-size: 24px;
+        line-height: 1.6;
+        color: var(--muted);
+        opacity: 0;
+      }
+      #s6-credit b {
+        color: var(--fg);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="15" data-width="1080" data-height="1920">
+      <div id="shake">
+        <!-- S1 -->
+        <section id="s1" class="scene">
+          <div id="s1-flood"></div>
+          <div id="s1-dot-wrap"><div id="s1-dot"></div></div>
+          <div id="s1-content">
+            <div id="s1-mq-a" class="marquee mono" data-layout-allow-overflow>MOTION DESIGN — SHOWREEL — 2026 — MOTION DESIGN — SHOWREEL — 2026 — MOTION DESIGN — SHOWREEL — 2026 —</div>
+            <div class="s1-title-wrap" id="s1-title-wrap" data-layout-allow-overlap>
+              <div class="s1-title s1-ghost gothic" aria-hidden="true" data-layout-ignore><span class="s1-line">SHOW</span><span class="s1-line">REEL</span></div>
+              <div class="s1-title gothic" id="s1-title"><span class="s1-line" data-split>SHOW</span><span class="s1-line" data-split>REEL</span></div>
+            </div>
+            <div id="s1-sticker">
+              <div id="s1-26" class="archivo">’26</div>
+              <div id="s1-tag" class="mono"><span class="blk">MOTION DESIGN</span><span class="blk">15 SECONDS · 1 COLOUR</span></div>
+            </div>
+            <div id="s1-mq-b" class="marquee mono" data-layout-allow-overflow>EVERY FRAME IN CODE — EVERY SOUND IN CODE — EVERY FRAME IN CODE — EVERY SOUND IN CODE — EVERY FRAME IN CODE —</div>
+          </div>
+        </section>
+
+        <!-- S2 -->
+        <section id="s2" class="scene">
+          <div id="s2-glow" class="glow"></div>
+          <div id="s2-ghost" class="gothic" aria-hidden="true" data-layout-ignore>02</div>
+          <div id="s2-words">
+            <div class="w archivo" id="w-motion">MOTION</div>
+            <div class="w archivo" id="w-is">IS</div>
+            <div class="w archivo" id="w-my">MY</div>
+            <div class="w archivo" id="w-native">NATIVE</div>
+            <div class="w gothic" id="w-language">LANGUAGE</div>
+          </div>
+          <div id="s2-stack">
+            <div class="st gothic st-accent">MOTION</div>
+            <div class="st gothic">IS MY</div>
+            <div class="st gothic st-outline" data-layout-ignore>NATIVE</div>
+            <div class="st gothic">LANGUAGE</div>
+            <div id="s2-underline"></div>
+          </div>
+          <div id="s2-metro"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </section>
+
+        <!-- S3 -->
+        <section id="s3" class="scene">
+          <div id="s3-grid"></div>
+          <div id="s3-orbit-wrap"><div id="s3-orbit"></div></div>
+          <div id="s3-hero-wrap"><div id="s3-hero"></div></div>
+          <div id="s3-code" class="mono"><span>clip-path: <b id="s3-code-val">circle()</b></span></div>
+          <div id="s3-caption" class="gothic" data-layout-allow-overlap><span class="blk">SHAPE,</span><span class="blk">SHIFTED.</span></div>
+        </section>
+
+        <!-- S4 -->
+        <section id="s4" class="scene">
+          <div id="s4-glow" class="glow"></div>
+          <div id="s4-stage-wrap">
+            <div id="s4-stage">
+              <div class="ring gothic" id="ring-a" data-text="DESIGN · RHYTHM · TIMING · CRAFT · " data-y="-330"></div>
+              <div class="ring gothic accent" id="ring-b" data-text="MOTION · MOTION · MOTION · MOTION · " data-y="0"></div>
+              <div class="ring gothic" id="ring-c" data-text="DEPTH · DETAIL · FEEL · PHYSICS · " data-y="330"></div>
+            </div>
+          </div>
+          <div id="s4-readout" class="mono">
+            <span class="blk">ring.a rotateY <b id="ro-a">0.0°</b></span>
+            <span class="blk">ring.b rotateY <b id="ro-b">0.0°</b></span>
+            <span class="blk">ring.c rotateY <b id="ro-c">0.0°</b></span>
+          </div>
+        </section>
+
+        <!-- S5 -->
+        <section id="s5" class="scene">
+          <div id="s5-inner">
+            <div id="s5-head" class="gothic" data-layout-allow-overlap><span class="blk">FEEL THE</span><em class="blk">CURVE.</em></div>
+            <svg id="s5-graph" viewBox="0 0 936 480" aria-hidden="true">
+              <g id="s5-gridlines" stroke="rgba(243,238,231,0.14)" stroke-width="2"></g>
+              <line x1="20" y1="460" x2="930" y2="460" stroke="rgba(243,238,231,0.5)" stroke-width="3" />
+              <line x1="20" y1="20" x2="20" y2="460" stroke="rgba(243,238,231,0.5)" stroke-width="3" />
+              <path id="s5-curve-ghost" fill="none" stroke="rgba(243,238,231,0.5)" stroke-width="4" stroke-dasharray="10 12" />
+              <path id="s5-curve" fill="none" stroke="#FF4B1F" stroke-width="8" stroke-linecap="round" />
+              <circle id="s5-curve-dot" r="16" fill="#FF4B1F" cx="20" cy="460" />
+              <text x="600" y="400" fill="#F3EEE7" font-family="JetBrains Mono" font-size="26" font-weight="700">expo.out</text>
+              <text x="600" y="436" fill="rgba(243,238,231,0.7)" font-family="JetBrains Mono" font-size="24">- - back.out(2)</text>
+            </svg>
+            <div id="s5-lanes"></div>
+            <div id="s5-foot" class="mono">SAME 1.0s. FIVE DIFFERENT FEELINGS.</div>
+          </div>
+        </section>
+
+        <!-- S6 -->
+        <section id="s6" class="scene">
+          <div id="s6-glow" class="glow"></div>
+          <div id="s6-stack">
+            <div class="s6-l gothic" id="s6-l1">EVERY FRAME.</div>
+            <div class="s6-l gothic s6-dim" id="s6-l2">EVERY SOUND.</div>
+            <div class="s6-code archivo" id="s6-l3" data-type>WRITTEN</div>
+            <div class="s6-code archivo" id="s6-l4"><span data-type>IN CODE</span><span id="s6-period"></span></div>
+          </div>
+          <div id="s6-credit" class="mono">PICTURE <b>HTML + CSS + GSAP</b> · SOUND <b id="s6-cues">0 SYNTH CUES IN JS</b><span class="blk">ZERO SAMPLES. ZERO STOCK. ONE COLOUR.</span></div>
+        </section>
+      </div>
+
+      <div id="blinds"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+
+      <!-- HUD -->
+      <div id="hud">
+        <div class="crop tl"></div>
+        <div class="crop tr"></div>
+        <div class="crop bl"></div>
+        <div class="crop br"></div>
+        <div id="hud-top" class="hud-row mono">
+          <span><span class="rec"></span>REEL/26</span>
+          <span id="hud-tc">00:00:00:00</span>
+        </div>
+        <div id="hud-track"><div id="hud-fill"></div></div>
+        <div id="hud-bottom" class="hud-row mono">
+          <span id="hud-scene">01 — DROP</span>
+          <span>1080×1920 · 30FPS</span>
+        </div>
+      </div>
+
+      <!-- film grain (registry: grain-overlay) -->
+      <div id="grain-overlay" style="position: absolute; inset: 0; pointer-events: none; z-index: 90; overflow: hidden">
+        <div class="grain-texture"></div>
+      </div>
+
+      <audio id="reel-audio" src="assets/reel-audio.wav" data-start="0" data-duration="15" data-track-index="10" data-volume="1"></audio>
+    </div>
+
+    <style>
+      @keyframes hf-grain-noise {
+        0%,
+        100% {
+          transform: translate(0, 0);
+        }
+        10% {
+          transform: translate(-5%, -5%);
+        }
+        20% {
+          transform: translate(-10%, 5%);
+        }
+        30% {
+          transform: translate(5%, -10%);
+        }
+        40% {
+          transform: translate(-5%, 15%);
+        }
+        50% {
+          transform: translate(-10%, 5%);
+        }
+        60% {
+          transform: translate(15%, 0);
+        }
+        70% {
+          transform: translate(0, 10%);
+        }
+        80% {
+          transform: translate(-15%, 0);
+        }
+        90% {
+          transform: translate(10%, 5%);
+        }
+      }
+      #grain-overlay .grain-texture {
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+        opacity: 0.1;
+        animation: hf-grain-noise 0.5s steps(1) 30;
+      }
+    </style>
+
+    <script>
+      (function () {
+        const R = window.REEL;
+        const S = R.scenes;
+        const tl = gsap.timeline({ paused: true });
+        const $ = (q) => document.querySelector(q);
+        const $$ = (q) => Array.from(document.querySelectorAll(q));
+        const hash = (n) => {
+          const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+          return x - Math.floor(x);
+        };
+        const FG = "#F3EEE7";
+        const BG = "#0D0C0B";
+
+        // ---------- DOM builders (all deterministic) ----------
+        $$("[data-split]").forEach((line) => {
+          const txt = line.textContent;
+          line.textContent = "";
+          [...txt].forEach((c) => {
+            const m = document.createElement("span");
+            m.className = "ltr-mask";
+            const l = document.createElement("span");
+            l.className = "ltr";
+            l.textContent = c;
+            m.appendChild(l);
+            line.appendChild(m);
+          });
+        });
+        const native = $("#w-native");
+        const NATIVE = native.textContent;
+        native.textContent = "";
+        const flips = [...NATIVE].map((c) => {
+          const s = document.createElement("span");
+          s.className = "flip";
+          s.textContent = c;
+          native.appendChild(s);
+          return s;
+        });
+        const grid = $("#s3-grid");
+        for (let i = 0; i < 48; i++) {
+          const t = document.createElement("div");
+          t.className = "tile";
+          t.appendChild(document.createElement("i"));
+          grid.appendChild(t);
+        }
+        $$(".ring").forEach((ring) => {
+          const text = ring.dataset.text;
+          const n = text.length;
+          const radius = 500;
+          ring.style.top = ring.dataset.y + "px";
+          [...text].forEach((c, i) => {
+            const a = (360 / n) * i;
+            ["front", "back"].forEach((side) => {
+              const s = document.createElement("span");
+              s.className = side;
+              s.textContent = c;
+              s.style.transform = `rotateY(${a}deg) translateZ(${radius}px)` + (side === "back" ? " rotateY(180deg)" : "");
+              ring.appendChild(s);
+            });
+          });
+        });
+        $$("[data-type]").forEach((el) => {
+          const txt = el.textContent;
+          el.textContent = "";
+          [...txt].forEach((c) => {
+            const s = document.createElement("span");
+            s.className = "ch";
+            s.textContent = c;
+            el.appendChild(s);
+          });
+        });
+        $("#s6-cues").textContent = R.cues.length + " SYNTH CUES IN JS";
+
+        // S3: 64-point polygons sampled by angle, so every morph interpolates cleanly.
+        const NPTS = 64;
+        const regular = (n, r, rot, inner) => {
+          const v = [];
+          const k = inner ? n * 2 : n;
+          for (let i = 0; i < k; i++) {
+            const a = rot + (i * Math.PI * 2) / k;
+            const rr = inner && i % 2 ? inner : r;
+            v.push([Math.cos(a) * rr, Math.sin(a) * rr]);
+          }
+          return v;
+        };
+        const ray = (verts, th) => {
+          const dx = Math.cos(th), dy = Math.sin(th);
+          let best = Infinity;
+          for (let i = 0; i < verts.length; i++) {
+            const [ax, ay] = verts[i];
+            const [bx, by] = verts[(i + 1) % verts.length];
+            const ex = bx - ax, ey = by - ay;
+            const den = dx * ey - dy * ex;
+            if (Math.abs(den) < 1e-9) continue;
+            const t = (ax * ey - ay * ex) / den;
+            const s = (ax * dy - ay * dx) / den;
+            if (t > 0 && s >= -1e-9 && s <= 1 + 1e-9) best = Math.min(best, t);
+          }
+          return best;
+        };
+        // radii per sample angle; a morph is a lerp between two radius arrays
+        const poly = (radiusAt) => {
+          const rs = [];
+          for (let i = 0; i < NPTS; i++) rs.push(radiusAt(-Math.PI / 2 + (i * Math.PI * 2) / NPTS));
+          return rs;
+        };
+        const polyCss = (a, b, u) => {
+          const pts = [];
+          for (let i = 0; i < NPTS; i++) {
+            const th = -Math.PI / 2 + (i * Math.PI * 2) / NPTS;
+            const r = a[i] + (b[i] - a[i]) * u;
+            pts.push(`${(50 + Math.cos(th) * r * 100).toFixed(2)}% ${(50 + Math.sin(th) * r * 100).toFixed(2)}%`);
+          }
+          return `polygon(${pts.join(", ")})`;
+        };
+        const SHAPES = {
+          circle: poly(() => 0.5),
+          tri: poly((th) => ray(regular(3, 0.56, -Math.PI / 2), th)),
+          square: poly((th) => ray(regular(4, 0.6, -Math.PI / 4), th)),
+          star: poly((th) => ray(regular(5, 0.56, -Math.PI / 2, 0.24), th)),
+        };
+        const hero = $("#s3-hero");
+        const MORPH_SEQ = [SHAPES.circle, SHAPES.tri, SHAPES.square, SHAPES.star, SHAPES.circle];
+        hero.style.clipPath = polyCss(SHAPES.circle, SHAPES.circle, 0);
+
+        // S5 lanes + curves
+        const LANES = [
+          ["linear", "none"],
+          ["power2.inOut", "power2.inOut"],
+          ["expo.out", "expo.out", true],
+          ["back.out(2)", "back.out(2)"],
+          ["elastic.out(1, 0.4)", "elastic.out(1, 0.4)"],
+        ];
+        const lanesEl = $("#s5-lanes");
+        LANES.forEach(([label, , hot], i) => {
+          const lane = document.createElement("div");
+          lane.className = "lane" + (hot ? " hot" : "");
+          lane.style.top = 1072 + i * 124 + "px";
+          lane.innerHTML = `<div class="lane-label mono">${label}</div><div class="lane-track"></div>`;
+          for (let g = 3; g >= 0; g--) {
+            const d = document.createElement("div");
+            d.className = "lane-dot" + (g ? " ghost" : "");
+            d.dataset.g = g;
+            d.style.opacity = g ? [1, 0.34, 0.18, 0.09][g] : 1;
+            lane.appendChild(d);
+          }
+          lanesEl.appendChild(lane);
+        });
+        const gl = $("#s5-gridlines");
+        for (let k = 1; k < 4; k++) {
+          gl.insertAdjacentHTML("beforeend", `<line x1="20" x2="930" y1="${460 - k * 110}" y2="${460 - k * 110}"/>`);
+          gl.insertAdjacentHTML("beforeend", `<line y1="20" y2="460" x1="${20 + k * 227.5}" x2="${20 + k * 227.5}"/>`);
+        }
+        const curvePath = (fn) => {
+          let d = "", len = 0, px = 0, py = 0;
+          for (let i = 0; i <= 90; i++) {
+            const p = i / 90;
+            const x = 20 + p * 900, y = 460 - fn(p) * 380;
+            d += (i ? " L" : "M") + x.toFixed(1) + " " + y.toFixed(1);
+            if (i) len += Math.hypot(x - px, y - py);
+            px = x;
+            py = y;
+          }
+          return { d, len };
+        };
+        const expoFn = gsap.parseEase("expo.out");
+        const backFn = gsap.parseEase("back.out(2)");
+        const cMain = curvePath(expoFn);
+        const cGhost = curvePath(backFn);
+        $("#s5-curve").setAttribute("d", cMain.d);
+        $("#s5-curve-ghost").setAttribute("d", cGhost.d);
+
+        // ---------- helpers ----------
+        const show = (sel, t) => tl.set(sel, { opacity: 1 }, t);
+        const hide = (sel, t) => tl.set(sel, { opacity: 0 }, t);
+        const hudColor = (c, t) => tl.set("#hud", { color: c }, t);
+
+        // ---------- global: progress bar ----------
+        tl.fromTo("#hud-fill", { scaleX: 0 }, { scaleX: 1, duration: R.DUR, ease: "none" }, 0);
+
+        // =============== S1 — THE DROP ===============
+        const s1 = R.s1;
+        tl.fromTo("#s1-dot", { y: -1150, scaleX: 0.8, scaleY: 1.3 }, { y: 0, scaleX: 1, scaleY: 1, duration: s1.impact, ease: "power2.in" }, s1.fall);
+        tl.to("#s1-dot", { scaleX: 1.6, scaleY: 0.5, y: 24, duration: 0.07, ease: "power2.out" }, s1.impact);
+        tl.to("#s1-dot", { scaleX: 0.85, scaleY: 1.2, y: -170, duration: 0.17, ease: "power2.out" }, s1.impact + 0.07);
+        tl.to("#s1-dot", { scaleX: 1, scaleY: 1, y: 0, duration: 0.1, ease: "power2.in" }, s1.bounce - 0.1);
+        tl.to("#s1-dot", { scaleX: 1.35, scaleY: 0.7, duration: 0.05, ease: "power2.out" }, s1.bounce);
+        tl.to("#s1-dot", { scaleX: 13, scaleY: 0.1, duration: 0.2, ease: "expo.out" }, s1.stretch);
+        tl.set("#s1-flood", { opacity: 1, scaleY: 0.005 }, s1.flood - 0.1);
+        hide("#s1-dot", s1.flood - 0.1);
+        tl.to("#s1-flood", { scaleY: 1, duration: 0.12, ease: "expo.in" }, s1.flood - 0.1);
+        hudColor(BG, s1.flood);
+        tl.fromTo("#s1-content", { opacity: 0 }, { opacity: 1, duration: 0.01 }, s1.flood - 0.04);
+        tl.fromTo("#s1-title .ltr", { yPercent: 105 }, { yPercent: 0, duration: 0.5, ease: "expo.out", stagger: 0.045 }, s1.letters);
+        tl.fromTo("#s1-26", { scale: 2.4, rotation: -14, opacity: 0 }, { scale: 1, rotation: -4, opacity: 1, duration: 0.3, ease: "back.out(2.2)" }, s1.stamp);
+        tl.fromTo("#s1-tag", { x: 60, opacity: 0 }, { x: 0, opacity: 1, duration: 0.35, ease: "power3.out" }, s1.stamp + 0.06);
+        tl.fromTo("#s1-mq-a", { x: 0 }, { x: -700, duration: 1.0, ease: "none" }, s1.flood);
+        tl.fromTo("#s1-mq-b", { x: -700 }, { x: 0, duration: 1.0, ease: "none" }, s1.flood);
+        tl.fromTo("#s1-title-wrap", { scale: 1.06 }, { scale: 1, duration: 0.96, ease: "power2.out" }, s1.flood + 0.04);
+
+        // =============== S2 — NATIVE LANGUAGE ===============
+        tl.set("#s1", { opacity: 0 }, S.s2[0]);
+        show("#s2", S.s2[0]);
+        hudColor(FG, S.s2[0]);
+        const W = R.s2.words;
+        show("#w-motion", W[0]);
+        tl.fromTo("#w-motion", { scale: 1.9, filter: "blur(22px)" }, { scale: 1, filter: "blur(0px)", duration: 0.4, ease: "power4.out" }, W[0]);
+        hide("#w-motion", W[1]);
+        show("#w-is", W[1]);
+        tl.fromTo("#w-is", { x: -1100, skewX: 18 }, { x: 0, skewX: 0, duration: 0.24, ease: "expo.out" }, W[1]);
+        hide("#w-is", W[2]);
+        show("#w-my", W[2]);
+        tl.fromTo("#w-my", { y: 520, rotation: 14 }, { y: 0, rotation: 0, duration: 0.24, ease: "circ.out" }, W[2]);
+        hide("#w-my", W[3]);
+        show("#w-native", W[3]);
+        tl.fromTo(flips, { rotationX: -95, opacity: 0 }, { rotationX: 0, opacity: 1, duration: 0.3, ease: "back.out(1.6)", stagger: 0.04 }, W[3]);
+        hide("#w-native", W[4]);
+        show("#w-language", W[4]);
+        tl.fromTo("#w-language", { scaleY: 2.6, scaleX: 0.55, y: 180 }, { scaleY: 1, scaleX: 1, y: 0, duration: 0.42, ease: "expo.out" }, W[4]);
+        tl.to("#w-language", { scale: 0.86, opacity: 0, filter: "blur(10px)", duration: 0.14, ease: "power2.in" }, R.s2.stack - 0.1);
+        tl.fromTo(".st", { y: 170, opacity: 0, rotation: 3 }, { y: 0, opacity: 1, rotation: 0, duration: 0.5, ease: "circ.out", stagger: 0.07 }, R.s2.stack);
+        tl.fromTo("#s2-underline", { scaleX: 0 }, { scaleX: 1, duration: 0.32, ease: "expo.inOut" }, R.s2.underline);
+        $$("#s2-metro i").forEach((tick, i) => {
+          tl.fromTo(tick, { opacity: 0.25, scaleY: 1 }, { opacity: 1, scaleY: 1.5, duration: 0.06, yoyo: true, repeat: 1, ease: "none" }, S.s2[0] + i * R.BEAT);
+        });
+        tl.fromTo("#s2-glow", { scale: 0.85, opacity: 0.7 }, { scale: 1.1, opacity: 1, duration: 3, ease: "sine.inOut" }, S.s2[0]);
+        tl.fromTo("#s2-ghost", { y: 120 }, { y: -80, duration: 3, ease: "none" }, S.s2[0]);
+        // blinds exit — covers the cut at 5.0, then retracts to reveal S3
+        tl.fromTo("#blinds i", { scaleY: 0, transformOrigin: "50% 100%" }, { scaleY: 1, duration: 0.24, ease: "power3.in", stagger: 0.035 }, R.s2.blinds);
+        tl.set("#s2", { opacity: 0 }, S.s3[0]);
+        show("#s3", S.s3[0]);
+        tl.set("#blinds i", { transformOrigin: "50% 0%" }, S.s3[0]);
+        tl.to("#blinds i", { scaleY: 0, duration: 0.3, ease: "expo.out", stagger: 0.035 }, S.s3[0] + 0.02);
+
+        // =============== S3 — FORM ===============
+        const s3 = R.s3;
+        const tiles = $$(".tile");
+        const fills = $$(".tile i");
+        tl.fromTo(tiles, { scale: 0, rotation: -45 }, { scale: 1, rotation: 0, duration: 0.45, ease: "back.out(2)", stagger: { grid: [8, 6], from: "center", amount: 0.35 } }, s3.grid);
+        tl.fromTo("#s3-hero", { scale: 0, rotation: -120 }, { scale: 1, rotation: 0, duration: 0.45, ease: "back.out(1.8)" }, s3.pop);
+        tl.fromTo("#s3-orbit", { scale: 0.4, opacity: 0, rotation: 0 }, { scale: 1, opacity: 1, rotation: 90, duration: 0.6, ease: "expo.out" }, s3.pop + 0.05);
+        tl.to("#s3-orbit", { rotation: 300, duration: 2.0, ease: "none" }, s3.pop + 0.65);
+        tl.fromTo("#s3-code", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35, ease: "power3.out" }, s3.pop + 0.1);
+        tl.fromTo("#s3-caption", { x: -160, opacity: 0 }, { x: 0, opacity: 1, duration: 0.5, ease: "expo.out" }, s3.pop + 0.15);
+        const rots = [180, 270, 432, 540];
+        s3.morphs.forEach((t, i) => {
+          tl.fromTo("#s3-hero", { rotation: i ? rots[i - 1] : 0 }, { rotation: rots[i], duration: 0.42, ease: "expo.out", immediateRender: false }, t);
+          tl.fromTo("#s3-hero", { scale: 0.82 }, { scale: 1, duration: 0.5, ease: "elastic.out(1, 0.45)", immediateRender: false }, t);
+          tl.fromTo(fills, { opacity: 0 }, { opacity: 0.85, duration: 0.1, yoyo: true, repeat: 1, ease: "power1.out", immediateRender: false, stagger: { grid: [8, 6], from: "center", amount: 0.32 } }, t + 0.02);
+          tl.fromTo(tiles, { scale: 0.8 }, { scale: 1, duration: 0.4, ease: "back.out(3)", immediateRender: false, stagger: { grid: [8, 6], from: "center", amount: 0.32 } }, t + 0.02);
+        });
+        // flood: the circle swallows the frame
+        tl.to("#s3-hero", { scale: 5.2, duration: 0.3, ease: "expo.in" }, s3.flood);
+        tl.to(["#s3-code", "#s3-caption", "#s3-orbit"], { opacity: 0, duration: 0.15 }, s3.flood + 0.05);
+        hudColor(BG, s3.flood + 0.2);
+
+        // =============== S4 — DEPTH (iris-in over the orange flood) ===============
+        const s4 = R.s4;
+        show("#s4", s3.iris);
+        tl.fromTo("#s4", { clipPath: "circle(0% at 50% 46%)" }, { clipPath: "circle(86% at 50% 46%)", duration: 0.45, ease: "expo.inOut" }, s3.iris);
+        tl.set("#s3", { opacity: 0 }, s3.iris + 0.46);
+        hudColor(FG, s3.iris + 0.3);
+        tl.fromTo(".ring", { rotationX: 80, scale: 0.2, opacity: 0 }, { rotationX: 0, scale: 1, opacity: 1, duration: 0.7, ease: "expo.out", stagger: 0.08 }, s4.rings);
+        const ringSpin = { a: [-20, -250], b: [30, 260], c: [-40, -290] };
+        const spinDur = s4.whip + 0.28 - s4.rings;
+        Object.entries(ringSpin).forEach(([k, [a, b]]) => {
+          tl.fromTo("#ring-" + k, { rotationY: a }, { rotationY: b, duration: spinDur, ease: "power1.inOut", immediateRender: false }, s4.rings);
+        });
+        tl.fromTo("#s4-stage", { rotationX: 22, rotationZ: -10, scale: 0.72 }, { rotationX: -10, rotationZ: 6, scale: 1.12, duration: spinDur, ease: "power1.inOut" }, s4.rings);
+        tl.fromTo("#s4-glow", { scale: 0.7, opacity: 0.5 }, { scale: 1.1, opacity: 1, duration: 1.5, ease: "sine.inOut", yoyo: true, repeat: 1 }, s4.rings);
+        tl.fromTo("#s4-readout", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.4, ease: "power3.out" }, s4.push);
+        // whip pan out
+        tl.to("#s4-stage-wrap", { x: -1300, filter: "blur(26px)", duration: 0.28, ease: "power3.in" }, s4.whip);
+        tl.to("#s4-readout", { x: -600, opacity: 0, duration: 0.2, ease: "power3.in" }, s4.whip);
+
+        // =============== S5 — TIMING ===============
+        const s5 = R.s5;
+        tl.set("#s4", { opacity: 0 }, S.s5[0]);
+        show("#s5", S.s5[0]);
+        tl.fromTo("#s5-inner", { x: 1100, filter: "blur(26px)" }, { x: 0, filter: "blur(0px)", duration: 0.34, ease: "power3.out" }, S.s5[0]);
+        tl.fromTo(".lane-track", { scaleX: 0 }, { scaleX: 1, duration: 0.35, ease: "expo.out", stagger: 0.05 }, s5.lanes + 0.05);
+        tl.fromTo(".lane-label", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.3, ease: "steps(10)", stagger: 0.05 }, s5.lanes + 0.05);
+        tl.fromTo("#s5-curve", { strokeDasharray: cMain.len, strokeDashoffset: cMain.len }, { strokeDashoffset: 0, duration: s5.raceDur, ease: "none" }, s5.race);
+        tl.fromTo("#s5-curve-ghost", { opacity: 0 }, { opacity: 1, duration: 0.3 }, s5.race);
+        const TRAVEL = 840;
+        $$(".lane").forEach((lane, i) => {
+          const ease = LANES[i][1];
+          lane.querySelectorAll(".lane-dot").forEach((d) => {
+            const g = +d.dataset.g;
+            tl.fromTo(d, { x: 0 }, { x: TRAVEL, duration: s5.raceDur, ease, immediateRender: true }, s5.race + g * 0.035);
+          });
+        });
+        tl.fromTo("#s5-foot", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.3, ease: "steps(14)" }, s5.race + s5.raceDur + 0.02);
+
+        // =============== S6 — WRITTEN IN CODE ===============
+        const s6 = R.s6;
+        tl.set("#s5", { opacity: 0 }, S.s6[0]);
+        show("#s6", S.s6[0]);
+        tl.fromTo("#s6-l1", { scale: 1.5, filter: "blur(18px)", opacity: 0, transformOrigin: "0% 50%" }, { scale: 1, filter: "blur(0px)", opacity: 1, duration: 0.3, ease: "power4.out" }, s6.line1);
+        tl.fromTo("#s6-l2", { x: 900, opacity: 0 }, { x: 0, opacity: 1, duration: 0.26, ease: "expo.out" }, s6.line2);
+        $$("#s6 .ch").forEach((c, i) => tl.set(c, { opacity: 1 }, s6.line3 + i * 0.035));
+        tl.fromTo("#s6-period", { x: 520, y: -1500, scale: 1 }, { x: 0, duration: s6.land - s6.dot, ease: "power1.out" }, s6.dot);
+        tl.fromTo("#s6-period", { y: -1500 }, { y: 0, duration: s6.land - s6.dot, ease: "power2.in", immediateRender: false }, s6.dot);
+        tl.to("#s6-period", { scaleX: 1.7, scaleY: 0.5, duration: 0.06, ease: "power2.out" }, s6.land);
+        tl.to("#s6-period", { scaleX: 1, scaleY: 1, duration: 0.5, ease: "elastic.out(1.2, 0.35)" }, s6.land + 0.06);
+        tl.fromTo("#s6-glow", { scale: 0.2, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "expo.out" }, s6.land);
+        tl.to("#s6-l2", { opacity: 0.5, duration: 0.4 }, s6.land);
+        tl.fromTo("#s6-credit", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, s6.land + 0.15);
+        tl.fromTo("#s6-stack", { scale: 1 }, { scale: 1.025, duration: R.DUR - s6.land, ease: "sine.out", transformOrigin: "0% 50%" }, s6.land);
+
+        // =============== per-frame: timecode, glitches, shakes, readouts ===============
+        const SCENE_NAMES = [
+          [S.s1[0], "01 — DROP"],
+          [S.s2[0], "02 — LANGUAGE"],
+          [S.s3[0], "03 — FORM"],
+          [S.s4[0], "04 — DEPTH"],
+          [S.s5[0], "05 — TIMING"],
+          [S.s6[0], "06 — CODE"],
+        ];
+        const pad = (n) => String(n).padStart(2, "0");
+        const envAt = (t, start, dur) => (t >= start && t < start + dur ? Math.pow(1 - (t - start) / dur, 2) : 0);
+        const SHAKES = [
+          [s1.impact, 0.18, 14],
+          [s1.flood, 0.3, 26],
+          [W[0], 0.14, 10],
+          [W[4], 0.16, 12],
+          [8.0, 0.28, 20],
+          [s6.line1, 0.14, 10],
+          [s6.land, 0.3, 18],
+        ];
+        const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&*";
+        const tc = $("#hud-tc"), sceneLbl = $("#hud-scene"), codeVal = $("#s3-code-val");
+        const ghost1 = $(".s1-ghost"), title1 = $("#s1-title"), s5in = $("#s5-inner");
+        const roA = $("#ro-a"), roB = $("#ro-b"), roC = $("#ro-c");
+        const ringA = $("#ring-a"), ringB = $("#ring-b"), ringC = $("#ring-c");
+        const cDot = $("#s5-curve-dot");
+        const shapeNames = ["circle()", "polygon(3)", "polygon(4)", "star(5)", "circle()"];
+        const proxy = { p: 0 };
+        tl.to(proxy, {
+          p: 1,
+          duration: R.DUR,
+          ease: "none",
+          onUpdate: () => {
+            const t = tl.time();
+            const f = Math.min(Math.floor(t * R.FPS + 1e-6), R.DUR * R.FPS - 1);
+            tc.textContent = `00:00:${pad(Math.floor(f / R.FPS))}:${pad(f % R.FPS)}`;
+            let name = SCENE_NAMES[0][1];
+            SCENE_NAMES.forEach(([st, n]) => {
+              if (t >= st - 1e-6) name = n;
+            });
+            sceneLbl.textContent = name;
+
+            // camera shake — quantized hash, decays to exactly zero
+            let sx = 0, sy = 0;
+            const q = Math.floor(t * 40);
+            SHAKES.forEach(([st, d, amp], k) => {
+              const e = envAt(t, st, d);
+              if (e) {
+                sx += (hash(q * 13 + k) * 2 - 1) * amp * e;
+                sy += (hash(q * 29 + k * 7) * 2 - 1) * amp * e;
+              }
+            });
+            gsap.set("#shake", { x: sx, y: sy });
+
+            // S1 glitch: ghost copy splits off, title shears, snaps clean
+            const g1 = envAt(t, s1.glitch, 0.24);
+            const q1 = Math.floor(t / 0.035);
+            if (g1) {
+              gsap.set(ghost1, { opacity: 0.9, x: (hash(q1 * 3) * 2 - 1) * 70 * g1, y: (hash(q1 * 5) * 2 - 1) * 16 * g1 });
+              gsap.set(title1, { x: (hash(q1 * 7) * 2 - 1) * 36 * g1, skewX: (hash(q1 * 11) * 2 - 1) * 12 * g1 });
+            } else {
+              gsap.set(ghost1, { opacity: 0, x: 0, y: 0 });
+              gsap.set(title1, { x: 0, skewX: 0 });
+            }
+
+            // S2 NATIVE decode glyphs
+            flips.forEach((el, i) => {
+              const settle = W[3] + i * 0.04 + 0.26;
+              if (t >= W[3] && t < settle) el.textContent = GLYPHS[Math.floor(hash(Math.floor(t / 0.03) * 17 + i) * GLYPHS.length)];
+              else el.textContent = NATIVE[i];
+            });
+
+            // S3 code readout follows the morph
+            let si = 0;
+            s3.morphs.forEach((mt, i) => {
+              if (t >= mt) si = i + 1;
+            });
+            codeVal.textContent = shapeNames[si];
+            // S3 hero morph: interpolate the 64 radii directly from the proxy
+            const morphEase = expoFn;
+            let mk = 0;
+            s3.morphs.forEach((mt, i) => {
+              if (t >= mt) mk = Math.min(i + 1, i + morphEase(Math.min(1, (t - mt) / 0.42)));
+            });
+            const mi = Math.min(3, Math.floor(mk));
+            hero.style.clipPath = polyCss(MORPH_SEQ[mi], MORPH_SEQ[mi + 1], mk - mi);
+
+            // S4 live rotation readouts
+            if (t >= S.s4[0] && t < S.s5[0]) {
+              roA.textContent = (+gsap.getProperty(ringA, "rotationY")).toFixed(1) + "°";
+              roB.textContent = (+gsap.getProperty(ringB, "rotationY")).toFixed(1) + "°";
+              roC.textContent = (+gsap.getProperty(ringC, "rotationY")).toFixed(1) + "°";
+            }
+
+            // S5 graph dot rides the expo curve
+            const rp = Math.max(0, Math.min(1, (t - s5.race) / s5.raceDur));
+            cDot.setAttribute("cx", (20 + rp * 900).toFixed(1));
+            cDot.setAttribute("cy", (460 - expoFn(rp) * 380).toFixed(1));
+
+            // S5 exit glitch
+            const g5 = envAt(t, s5.cut, S.s6[0] - s5.cut);
+            const q5 = Math.floor(t / 0.03);
+            gsap.set(s5in, g5 ? { x: (hash(q5 * 3 + 1) * 2 - 1) * 60 * g5 + 0, skewX: (hash(q5 * 9) * 2 - 1) * 16 * g5 } : { skewX: 0 });
+          },
+        }, 0);
+
+        window.__timelines["main"] = tl;
+      })();
+    </script>
+  </body>
+</html>
