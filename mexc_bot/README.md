@@ -52,3 +52,4 @@ Bot ochgan pozitsiya va SL/TP orderlarni demo.binance.com da ko'rasiz.
 - API kalitga **Withdraw ruxsatini bermang**, IP cheklovini qo'ying.
 - MEXC'da futures demo API yo'q — u yerda `paper` rejimdan foydalaning.
 - Bot to'xtatilganda ochiq pozitsiya va orderlarni ilovada tekshiring.
+- Ochiq pozitsiyani darhol yopish: `python3 allin_bot.py --close` (SL/TP orderlar ham bekor qilinadi).

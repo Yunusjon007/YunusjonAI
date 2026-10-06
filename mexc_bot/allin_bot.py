@@ -432,11 +432,28 @@ def run(exchange, broker, symbols=None, sleep=time.sleep, max_loops=None):
     return "max_loops"
 
 
+def close_now(exchange, broker):
+    """`python3 allin_bot.py --close` — ochiq pozitsiyani bozor narxida yopadi va SL/TP ni bekor qiladi."""
+    if MODE == "paper":
+        sys.exit("paper rejimda birjada pozitsiya yo'q.")
+    exchange.load_markets()
+    broker.setup(available_symbols(exchange, SYMBOLS))
+    symbol = broker.position_symbol()
+    if not symbol:
+        log.info("Ochiq pozitsiya yo'q.")
+        return
+    broker.close(exchange.fetch_ticker(symbol)["last"])
+    log.info("%s pozitsiya bozor narxida yopildi. Balans: %.2f USDT", short(symbol), broker.balance())
+
+
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
     validate_config()
     exchange = make_exchange()
     broker = make_broker(exchange)
+    if "--close" in sys.argv:
+        close_now(exchange, broker)
+        return
     if MODE == "live":
         log.warning("⚠️  LIVE rejim: haqiqiy pul bilan savdo. To'xtatish uchun Ctrl+C.")
     try:
