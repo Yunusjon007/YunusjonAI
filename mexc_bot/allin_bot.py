@@ -127,6 +127,9 @@ class PaperBroker:
     def setup(self, symbols):
         pass
 
+    def max_notional(self, symbol):
+        return None  # cheklov yo'q
+
     def balance(self):
         return self.cash
 
@@ -174,6 +177,9 @@ class LiveBroker:
                 self.symbol = p["symbol"]
                 log.info("Ochiq pozitsiya topildi: %s — kuzatishda davom etaman.", short(self.symbol))
                 break
+
+    def max_notional(self, symbol):
+        return None  # MEXC cheklovini birja o'zi tekshiradi
 
     def balance(self):
         bal = self.ex.fetch_balance()
@@ -226,6 +232,20 @@ class BinanceBroker(LiveBroker):
     def __init__(self, exchange):
         super().__init__(exchange)
         self.prepared = set()  # margin/leverage o'rnatilgan coinlar
+        self.caps = {}         # coin -> shu leverage'da ruxsat etilgan maksimal pozitsiya (USDT)
+
+    def max_notional(self, symbol):
+        """Binance leverage bracket: LEVERAGE bilan ochish mumkin bo'lgan eng katta pozitsiya."""
+        if symbol not in self.caps:
+            try:
+                tiers = self.ex.fetch_market_leverage_tiers(symbol)
+                caps = [t["maxNotional"] for t in tiers
+                        if t.get("maxNotional") and (t.get("maxLeverage") or 0) >= LEVERAGE]
+                self.caps[symbol] = max(caps) if caps else 0
+            except ccxt.BaseError as e:
+                log.warning("%s: pozitsiya limitini olib bo'lmadi: %s", short(symbol), e)
+                return None
+        return self.caps[symbol]
 
     def _prepare(self, symbol):
         if symbol in self.prepared:
@@ -402,6 +422,15 @@ def run(exchange, broker, symbols=None, sleep=time.sleep, max_loops=None):
         symbol, side = signals[0]
         price = exchange.fetch_ticker(symbol)["last"]
         notional = bal * MARGIN_SHARE * LEVERAGE
+        cap = broker.max_notional(symbol)
+        if cap is not None and notional > cap * 0.98:
+            if cap <= 0:
+                log.warning("%s: %dx leverage bilan savdo mumkin emas, o'tkazib yuborildi.", short(symbol), LEVERAGE)
+                sleep(POLL_SECONDS)
+                return None
+            log.info("%s: Binance limiti %dx da %.0f USDT — pozitsiya shu limitgacha kichraytirildi.",
+                     short(symbol), LEVERAGE, cap)
+            notional = cap * 0.98
         contracts = contracts_for(exchange, symbol, notional, price)
         if contracts <= 0:
             log.warning("%s: balans minimal kontrakt uchun yetmaydi.", short(symbol))
@@ -426,6 +455,12 @@ def run(exchange, broker, symbols=None, sleep=time.sleep, max_loops=None):
         except ccxt.NetworkError as e:
             log.warning("Tarmoq xatosi, 10s dan keyin qayta urinaman: %s", e)
             sleep(10)
+            continue
+        except (ccxt.AuthenticationError, ccxt.PermissionDenied):
+            raise  # kalit xato — davom etib bo'lmaydi
+        except ccxt.ExchangeError as e:
+            log.error("Birja orderni rad etdi, keyingi signalni kutaman: %s", e)
+            sleep(POLL_SECONDS)
             continue
         if result:
             return result
