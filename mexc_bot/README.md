@@ -22,19 +22,28 @@ Qaysi coinlar tanlangani va qaysilari nega chiqarilganini ko'rish: `python3 alli
 - Signal: EMA9 / EMA21 kesishishi + RSI filtri
 - Marja = balansning **1%**, leverage **10x**, isolated
 - **TP**: narx **+3%** foyda tomonga yursa (Binance'da ROI ≈ +30%)
-- **SL**: narx **−1%** qarshi tomonga yursa (ROI ≈ −10%)
-- Bir vaqtda **5 tagacha** savdo, har bir coinda bittadan
+- **Martingeyl (2 qadam)**: narx kirishdan **−1%** qarshi yursa — pozitsiyaga **2×**, **−2%** da yana **4×** qo'shiladi
+- Martingeyl qilingan coinning sof foydasi (komissiyalardan keyin) **+1$** ga yetishi bilan
+  **shu coindagi barcha savdolar yopiladi** (bu narx birjaga TP sifatida ham qo'yiladi)
+- **Oxirgi SL**: kirishdan **−3%** (ikkala martingeyldan keyin). Martingeyl o'chirilsa (`MARTINGALE_STEPS=0`) SL = −1%
+- Bir vaqtda **20 tagacha** coinda savdo, har bir coinda bitta pozitsiya
+- Barcha pozitsiyalar marjasi balansning **50%** idan oshmaydi — limitga yetsa, yangi savdo va martingeyl qilinmaydi
 - Yopilgan coin kamida bitta sham davomida qayta ochilmaydi
 - Bugungi zarar balansning **3%** iga yetsa — ertagacha yangi savdo ochilmaydi (ochiqlari kuzatiladi)
 
-### 5 000 USDT balansda bitta savdo
-| | USDT |
-|---|---|
-| Marja (balansning 1%) | 50 |
-| Pozitsiya (50 × 10x) | 500 |
-| TP bo'lsa | ≈ +14.5 (komissiya bilan) |
-| SL bo'lsa | ≈ −5.5 (komissiya bilan) |
-| 5 ta savdo ochiq bo'lsa ham bo'sh qoladi | ≈ 4 750 |
+### 5 000 USDT balansda bitta coin
+| Holat | Pozitsiya | Natija (komissiya bilan) |
+|---|---|---|
+| Kirish (marja 50 USDT × 10x) | 500 USDT | TP +3% da ≈ **+14.5** |
+| 1-martingeyl (−1%) | +1 000 → 1 500 USDT | +1$ da yopiladi ≈ **+1.0** |
+| 2-martingeyl (−2%) | +2 000 → 3 500 USDT | +1$ da yopiladi ≈ **+1.0** |
+| Oxirgi SL (−3%) | 3 500 USDT | ≈ **−58** |
+
+### ⚠️ Martingeyl haqida haqiqat
+Martingeyl savdolarning **~90%** ini yutuq qiladi, lekin bitta oxirgi SL (≈ −58 USDT) **~58 ta**
++1$ yutuqni yeb ketadi. Narx tasodifiy harakat qilganda o'rtacha natija savdo boshiga
+**≈ −1.7 USDT** (martingeylsiz ≈ −0.5 USDT) — farq katta pozitsiyalar komissiyasidan.
+Shuning uchun statistikada **yutuq foiziga emas**, `--stats` dagi **Sof natija** va **Profit factor** ga qarang.
 
 ## Buyruqlar
 ```bash
@@ -74,8 +83,14 @@ Bot ishga tushganda `Sozlamalar: ...` qatorida qaysi qiymatlar ishlayotganini ko
 | `MARGIN_PCT` | 1 | Har savdoga balansning necha foizi marja |
 | `LEVERAGE` | 10 | Leverage (plecho) |
 | `TP_PCT` | 3 | Narx necha % foyda tomonga yursa yopiladi |
-| `SL_PCT` | 1 | Narx necha % qarshi yursa yopiladi |
-| `MAX_POSITIONS` | 5 | Bir vaqtda nechta savdo |
+| `SL_PCT` | 1 | Martingeyl o'chiq bo'lganda SL (narx %) |
+| `MAX_POSITIONS` | 20 | Bir vaqtda nechta coinda savdo |
+| `MAX_MARGIN_PCT` | 50 | Barcha pozitsiyalar marjasi, balansdan % (martingeyl bilan birga) |
+| `MARTINGALE_STEPS` | 2 | Martingeyl qadamlari (0 = o'chiq) |
+| `MARTINGALE_STEP_PCT` | 1 | Narx kirishdan har necha % qarshi yurganda qo'shiladi |
+| `MARTINGALE_MULT` | 2 | Har qadamda hajm necha baravar (1x → 2x → 4x) |
+| `MARTINGALE_PROFIT_USDT` | 1 | Martingeyl qilingan coin shu sof foydada (USDT) yopiladi |
+| `MARTINGALE_SL_PCT` | 3 | Martingeyldan keyingi oxirgi SL (kirishdan narx %) |
 | `DAILY_LOSS_PCT` | 3 | Kunlik zarar limiti (balansdan %) |
 | `TIMEFRAME` | 5m | Shamlar |
 | `STATUS_MINUTES` | 5 | Holat qatori necha daqiqada bir |
@@ -105,6 +120,9 @@ foydaning ~1/3 qismi komissiyaga ketadi.
 3. `.env` ga `EXCHANGE=binance`, `MODE=demo` va kalitlarni yozing.
 
 ## Xavfsizlik
+- Bot qayta ishga tushirilganda birjada ochiq qolgan pozitsiyalar kuzatiladi, lekin ularga **martingeyl qo'shilmaydi**
+  (oldingi holat noma'lum) — ular birjadagi SL/TP bilan yopiladi.
+- MEXC live rejimida martingeyl o'chiq (sinalmagan).
 - API kalitga **Withdraw ruxsatini bermang**, IP cheklovini qo'ying.
 - SL/TP birjaga qo'yiladi; SL qo'yilmasa, pozitsiya darhol yopiladi (Binance).
 - MEXC'da futures demo API yo'q — u yerda `paper` rejimdan foydalaning. MEXC live sinalmagan.
