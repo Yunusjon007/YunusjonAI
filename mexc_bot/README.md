@@ -27,7 +27,11 @@ python allin_bot.py
 Bot ochgan pozitsiya va SL/TP orderlarni demo.binance.com da ko'rasiz.
 
 ## Strategiya
+- Har daqiqada **20 ta coin** tahlil qilinadi (BTC, ETH, SOL, BNB, XRP, DOGE, ADA, AVAX, LINK, DOT,
+  LTC, TRX, NEAR, SUI, APT, ARB, OP, FIL, ATOM, AAVE). Ro'yxatni `.env` dagi `SYMBOLS` bilan o'zgartirish mumkin
 - 1m shamlar: EMA9 / EMA21 kesishishi + RSI filtri
+- Bir nechta coinda signal bo'lsa — ro'yxatdagi birinchisi (eng likvidi) tanlanadi
+- Bir vaqtda faqat **bitta** pozitsiya (all-in)
 - Depozitning 95% i marja, isolated, 20x
 - TP +1% narx (≈ +20% depozit), SL −0.5% narx (≈ −10% depozit)
 - SL/TP birjaga qo'yiladi; SL qo'yilmasa, pozitsiya darhol yopiladi (Binance)
@@ -37,6 +41,7 @@ Bot ochgan pozitsiya va SL/TP orderlarni demo.binance.com da ko'rasiz.
 | O'zgaruvchi | Ma'nosi |
 |---|---|
 | `EXCHANGE` | `binance` yoki `mexc` |
+| `SYMBOLS` | Coinlar ro'yxati, masalan `BTC,ETH,SOL` (bo'sh = 20 ta standart) |
 | `LEVERAGE` | Leverage (bot SL likvidatsiyadan oldin turishini tekshiradi) |
 | `MARGIN_SHARE` | Balansning qancha qismi bitta savdoga (1 = to'liq all-in) |
 | `TP_PCT` / `SL_PCT` | Narx o'zgarishi foizi |

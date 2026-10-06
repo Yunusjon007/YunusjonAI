@@ -1,5 +1,5 @@
 """
-MEXC / Binance Futures — "All-in + yuqori leverage" scalping bot.
+MEXC / Binance Futures — "All-in + yuqori leverage" scalping bot (ko'p coinli skaner).
 
 DIQQAT: bu eng xavfli razgon usuli. Bitta xato savdo depozitning katta qismini
 olib ketishi mumkin. Standart rejim MODE=paper (haqiqiy pul ishlatilmaydi).
@@ -10,10 +10,12 @@ Rejimlar:
   live  — haqiqiy pul
 
 Strategiya:
+  - Har bir yangi shamda SYMBOLS ro'yxatidagi barcha coinlar (standart: 20 ta) tahlil qilinadi
   - 1 daqiqalik shamlarda EMA(9) va EMA(21) kesishishi + RSI filtri
   - EMA9 EMA21 ni pastdan yuqoriga kesib o'tsa va RSI < 70 -> LONG
   - EMA9 EMA21 ni yuqoridan pastga kesib o'tsa va RSI > 30 -> SHORT
-  - Depozitning MARGIN_SHARE qismi bitta pozitsiyaga (all-in), isolated margin
+  - Bir nechta coinda signal bo'lsa, ro'yxatda birinchisi (eng likvidi) tanlanadi
+  - Bir vaqtda faqat BITTA pozitsiya: depozitning MARGIN_SHARE qismi (all-in), isolated margin
   - Take-profit / stop-loss birjaga ham qo'yiladi, bot ham kuzatib turadi
   - Maqsad (TARGET_X) bajarilsa yoki ketma-ket MAX_LOSSES_IN_ROW zarar bo'lsa, bot to'xtaydi
 """
@@ -35,9 +37,15 @@ def env(name, default, cast=str):
     return cast(value) if value not in (None, "") else default
 
 
+# Likvidlik bo'yicha tartiblangan 20 ta USDT perpetual (Binance va MEXC'da bor)
+DEFAULT_SYMBOLS = (
+    "BTC,ETH,SOL,BNB,XRP,DOGE,ADA,AVAX,LINK,DOT,"
+    "LTC,TRX,NEAR,SUI,APT,ARB,OP,FIL,ATOM,AAVE"
+)
+
 EXCHANGE = env("EXCHANGE", "mexc").lower()       # mexc | binance
 MODE = env("MODE", "paper").lower()              # paper | demo | live
-SYMBOL = env("SYMBOL", "BTC/USDT:USDT")
+SYMBOLS = [f"{c.strip().upper()}/USDT:USDT" for c in env("SYMBOLS", DEFAULT_SYMBOLS).split(",") if c.strip()]
 TIMEFRAME = env("TIMEFRAME", "1m")
 LEVERAGE = env("LEVERAGE", 20, int)
 MARGIN_SHARE = env("MARGIN_SHARE", 0.95, float)  # balansning qancha qismi marjaga (0.95 = 95%)
@@ -54,6 +62,10 @@ POLL_SECONDS = env("POLL_SECONDS", 3, float)
 PAPER_BALANCE = env("PAPER_BALANCE", 100.0, float)
 
 MAINTENANCE_MARGIN_PCT = 0.4  # taxminiy; likvidatsiya masofasini hisoblash uchun
+
+
+def short(symbol):
+    return symbol.split("/")[0]
 
 
 # ---------------------------------------------------------------- indikatorlar
@@ -82,43 +94,49 @@ def rsi(values, period):
     return 100 - 100 / (1 + avg_gain / avg_loss)
 
 
-def signal(closes):
-    """'long', 'short' yoki None. Faqat yopilgan shamlar beriladi."""
+def analyze(closes):
+    """(signal, rsi, ema9_yuqorida) qaytaradi. signal: 'long', 'short' yoki None.
+    Faqat yopilgan shamlar beriladi; ma'lumot yetmasa None."""
     if len(closes) < max(EMA_SLOW, RSI_PERIOD) + 2:
         return None
     fast, slow = ema(closes, EMA_FAST), ema(closes, EMA_SLOW)
     r = rsi(closes, RSI_PERIOD)
-    trend = "EMA9 yuqorida" if fast[-1] > slow[-1] else "EMA9 pastda"
-    log.info("Kutilmoqda | narx %.2f | EMA%d %.2f | EMA%d %.2f (%s) | RSI %.1f",
-             closes[-1], EMA_FAST, fast[-1], EMA_SLOW, slow[-1], trend, r)
+    side = None
     if fast[-2] <= slow[-2] and fast[-1] > slow[-1] and r < 70:
-        return "long"
-    if fast[-2] >= slow[-2] and fast[-1] < slow[-1] and r > 30:
-        return "short"
-    return None
+        side = "long"
+    elif fast[-2] >= slow[-2] and fast[-1] < slow[-1] and r > 30:
+        side = "short"
+    return side, r, fast[-1] > slow[-1]
+
+
+def signal(closes):
+    result = analyze(closes)
+    return result[0] if result else None
 
 
 # ---------------------------------------------------------------- brokerlar
 
 class PaperBroker:
-    """Haqiqiy MEXC narxlari, lekin virtual balans."""
+    """Haqiqiy narxlar, lekin virtual balans."""
 
     def __init__(self, exchange, balance):
         self.ex = exchange
         self.cash = balance
-        self.pos = None  # dict(side, contracts, entry, sl, tp, margin)
+        self.pos = None  # dict(symbol, side, contracts, entry, sl, tp, notional, margin)
+
+    def setup(self, symbols):
+        pass
 
     def balance(self):
         return self.cash
 
-    def has_position(self):
-        return self.pos is not None
+    def position_symbol(self):
+        return self.pos["symbol"] if self.pos else None
 
-    def open(self, side, contracts, price, sl, tp, notional):
-        margin = notional / LEVERAGE
+    def open(self, symbol, side, contracts, price, sl, tp, notional):
         self.cash -= notional * FEE_PCT / 100
-        self.pos = dict(side=side, contracts=contracts, entry=price, sl=sl, tp=tp,
-                        notional=notional, margin=margin)
+        self.pos = dict(symbol=symbol, side=side, contracts=contracts, entry=price, sl=sl, tp=tp,
+                        notional=notional, margin=notional / LEVERAGE)
 
     def check_exit(self, price):
         """Birjadagi SL/TP ni simulyatsiya qiladi. Yopilsa True qaytaradi."""
@@ -145,72 +163,95 @@ class LiveBroker:
 
     def __init__(self, exchange):
         self.ex = exchange
+        self.symbols = []
+        self.symbol = None  # ochiq pozitsiya coini
 
-    def setup(self):
-        pass
+    def setup(self, symbols):
+        self.symbols = symbols
+        # Bot qayta ishga tushirilganda ochiq qolgan pozitsiyani topamiz
+        for p in self.ex.fetch_positions(symbols):
+            if float(p.get("contracts") or 0) > 0:
+                self.symbol = p["symbol"]
+                log.info("Ochiq pozitsiya topildi: %s — kuzatishda davom etaman.", short(self.symbol))
+                break
 
     def balance(self):
         bal = self.ex.fetch_balance()
         return float(bal["USDT"]["total"] or 0)
 
     def _position(self):
-        for p in self.ex.fetch_positions([SYMBOL]):
+        if not self.symbol:
+            return None
+        for p in self.ex.fetch_positions([self.symbol]):
             if float(p.get("contracts") or 0) > 0:
                 return p
         return None
 
-    def has_position(self):
-        return self._position() is not None
+    def position_symbol(self):
+        return self.symbol
 
-    def open(self, side, contracts, price, sl, tp, notional):
+    def open(self, symbol, side, contracts, price, sl, tp, notional):
         self.ex.create_order(
-            SYMBOL, "market", "buy" if side == "long" else "sell", contracts,
+            symbol, "market", "buy" if side == "long" else "sell", contracts,
             params={
                 "marginMode": "isolated",
                 "leverage": LEVERAGE,
                 # MEXC order/create maydonlari: birja tomonida SL/TP
-                "stopLossPrice": float(self.ex.price_to_precision(SYMBOL, sl)),
-                "takeProfitPrice": float(self.ex.price_to_precision(SYMBOL, tp)),
+                "stopLossPrice": float(self.ex.price_to_precision(symbol, sl)),
+                "takeProfitPrice": float(self.ex.price_to_precision(symbol, tp)),
             },
         )
+        self.symbol = symbol
 
     def check_exit(self, price):
         # SL/TP birjada turibdi; pozitsiya yo'qolgan bo'lsa — yopilgan.
-        return not self.has_position()
+        if self._position():
+            return False
+        self.symbol = None
+        return True
 
     def close(self, price):
         p = self._position()
-        if not p:
-            return
-        self.ex.create_order(
-            SYMBOL, "market", "sell" if p["side"] == "long" else "buy", float(p["contracts"]),
-            params={"reduceOnly": True, "marginMode": "isolated", "leverage": LEVERAGE},
-        )
+        if p:
+            self.ex.create_order(
+                self.symbol, "market", "sell" if p["side"] == "long" else "buy", float(p["contracts"]),
+                params={"reduceOnly": True, "marginMode": "isolated", "leverage": LEVERAGE},
+            )
+        self.symbol = None
 
 
 class BinanceBroker(LiveBroker):
     """Binance USDT-M futures (demo yoki haqiqiy). SL/TP alohida algo orderlar sifatida."""
 
-    def setup(self):
+    def __init__(self, exchange):
+        super().__init__(exchange)
+        self.prepared = set()  # margin/leverage o'rnatilgan coinlar
+
+    def _prepare(self, symbol):
+        if symbol in self.prepared:
+            return
         try:
-            self.ex.set_margin_mode("isolated", SYMBOL)
+            self.ex.set_margin_mode("isolated", symbol)
         except ccxt.MarginModeAlreadySet:
             pass  # allaqachon isolated
-        self.ex.set_leverage(LEVERAGE, SYMBOL)
+        self.ex.set_leverage(LEVERAGE, symbol)
+        self.prepared.add(symbol)
 
-    def _cancel_triggers(self):
+    def _cancel_triggers(self, symbol):
         try:
-            self.ex.cancel_all_orders(SYMBOL, params={"trigger": True})
+            self.ex.cancel_all_orders(symbol, params={"trigger": True})
         except ccxt.BaseError as e:
-            log.warning("SL/TP orderlarni bekor qilib bo'lmadi: %s", e)
+            log.warning("%s: SL/TP orderlarni bekor qilib bo'lmadi: %s", short(symbol), e)
 
-    def open(self, side, contracts, price, sl, tp, notional):
+    def open(self, symbol, side, contracts, price, sl, tp, notional):
+        self._prepare(symbol)
         entry_side, exit_side = ("buy", "sell") if side == "long" else ("sell", "buy")
-        self.ex.create_order(SYMBOL, "market", entry_side, contracts)
+        self.ex.create_order(symbol, "market", entry_side, contracts)
+        self.symbol = symbol
         try:
-            self.ex.create_order(SYMBOL, "market", exit_side, contracts,
+            self.ex.create_order(symbol, "market", exit_side, contracts,
                                  params={"stopLossPrice": sl, "reduceOnly": True})
-            self.ex.create_order(SYMBOL, "market", exit_side, contracts,
+            self.ex.create_order(symbol, "market", exit_side, contracts,
                                  params={"takeProfitPrice": tp, "reduceOnly": True})
         except ccxt.BaseError as e:
             # Stop-losssiz all-in pozitsiyani ochiq qoldirmaymiz
@@ -219,17 +260,20 @@ class BinanceBroker(LiveBroker):
             raise
 
     def check_exit(self, price):
-        if self.has_position():
+        symbol = self.symbol
+        if not super().check_exit(price):
             return False
-        self._cancel_triggers()  # TP ishlasa SL qoladi (yoki aksincha) — tozalaymiz
+        self._cancel_triggers(symbol)  # TP ishlasa SL qoladi (yoki aksincha) — tozalaymiz
         return True
 
     def close(self, price):
+        symbol = self.symbol
         super().close(price)
-        self._cancel_triggers()
+        if symbol:
+            self._cancel_triggers(symbol)
 
 
-# ---------------------------------------------------------------- asosiy sikl
+# ---------------------------------------------------------------- sozlash
 
 def validate_config():
     liq_distance = 100 / LEVERAGE - MAINTENANCE_MARGIN_PCT
@@ -244,6 +288,8 @@ def validate_config():
         sys.exit("demo rejim faqat Binance uchun (MEXC futures demo API bermaydi). MODE=paper ishlating.")
     if not 0 < MARGIN_SHARE <= 1:
         sys.exit("MARGIN_SHARE 0 dan katta va 1 dan kichik yoki teng bo'lishi kerak.")
+    if not SYMBOLS:
+        sys.exit("SYMBOLS bo'sh. Masalan: SYMBOLS=BTC,ETH,SOL")
 
 
 def make_exchange():
@@ -266,33 +312,65 @@ def make_broker(exchange):
     return BinanceBroker(exchange) if EXCHANGE == "binance" else LiveBroker(exchange)
 
 
-def contracts_for(exchange, notional, price):
-    market = exchange.market(SYMBOL)
+def available_symbols(exchange, symbols):
+    ok = [s for s in symbols if s in exchange.markets and exchange.markets[s].get("active", True) is not False]
+    missing = [short(s) for s in symbols if s not in ok]
+    if missing:
+        log.warning("Birjada topilmadi, o'tkazib yuboriladi: %s", ", ".join(missing))
+    return ok
+
+
+def contracts_for(exchange, symbol, notional, price):
+    market = exchange.market(symbol)
     size = market.get("contractSize") or 1
-    return float(exchange.amount_to_precision(SYMBOL, notional / (price * size)))
+    return float(exchange.amount_to_precision(symbol, notional / (price * size)))
 
 
-def run(exchange, broker, sleep=time.sleep, max_loops=None):
+# ---------------------------------------------------------------- asosiy sikl
+
+def scan(exchange, symbols):
+    """Barcha coinlarni tahlil qiladi. (signallar[(symbol, side)], qisqa_hisobot) qaytaradi."""
+    signals, ups, downs = [], 0, 0
+    for symbol in symbols:
+        try:
+            candles = exchange.fetch_ohlcv(symbol, TIMEFRAME, limit=EMA_SLOW + RSI_PERIOD + 50)
+        except ccxt.BaseError as e:
+            log.warning("%s: shamlarni olib bo'lmadi: %s", short(symbol), e)
+            continue
+        closed = candles[:-1]  # oxirgi sham hali yopilmagan
+        result = analyze([c[4] for c in closed])
+        if not result:
+            continue
+        side, _, up = result
+        ups, downs = ups + up, downs + (not up)
+        if side:
+            signals.append((symbol, side))
+    report = f"{ups} ta coin EMA9 yuqorida, {downs} ta pastda"
+    return signals, report
+
+
+def run(exchange, broker, symbols=None, sleep=time.sleep, max_loops=None):
     exchange.load_markets()
+    symbols = available_symbols(exchange, symbols or SYMBOLS)
+    if not symbols:
+        sys.exit("Ro'yxatdagi birorta coin birjada topilmadi.")
+    broker.setup(symbols)
     start = broker.balance()
-    losses_in_row = 0
-    last_candle = None
-    entry_balance = start  # qayta ishga tushirilganda ochiq pozitsiya bo'lsa ham ishlaydi
-    loops = 0
-    log.info("%s | rejim=%s %s %dx | boshlang'ich balans %.2f USDT | maqsad %.1fx",
-             EXCHANGE.upper(), MODE, SYMBOL, LEVERAGE, start, TARGET_X)
+    state = dict(losses_in_row=0, last_candle=None, entry_balance=start)
+    log.info("%s | rejim=%s | %d ta coin | %dx | boshlang'ich balans %.2f USDT | maqsad %.1fx",
+             EXCHANGE.upper(), MODE, len(symbols), LEVERAGE, start, TARGET_X)
+    log.info("Coinlar: %s", ", ".join(short(s) for s in symbols))
 
     def step():
-        nonlocal losses_in_row, last_candle, entry_balance
-        price = exchange.fetch_ticker(SYMBOL)["last"]
-
-        if broker.has_position():
+        open_symbol = broker.position_symbol()
+        if open_symbol:
+            price = exchange.fetch_ticker(open_symbol)["last"]
             if broker.check_exit(price):
                 bal = broker.balance()
-                result = bal - entry_balance
-                losses_in_row = losses_in_row + 1 if result < 0 else 0
-                log.info("Pozitsiya yopildi: %+.2f USDT | balans %.2f USDT (%.2fx)",
-                         result, bal, bal / start)
+                result = bal - state["entry_balance"]
+                state["losses_in_row"] = state["losses_in_row"] + 1 if result < 0 else 0
+                log.info("%s pozitsiya yopildi: %+.2f USDT | balans %.2f USDT (%.2fx)",
+                         short(open_symbol), result, bal, bal / start)
             sleep(POLL_SECONDS)
             return None
 
@@ -303,42 +381,50 @@ def run(exchange, broker, sleep=time.sleep, max_loops=None):
         if bal < MIN_BALANCE:
             log.info("Balans %.2f USDT — juda kam. Bot to'xtadi.", bal)
             return "broke"
-        if losses_in_row >= MAX_LOSSES_IN_ROW:
-            log.info("Ketma-ket %d ta zarar. Bugun savdo yetarli — bot to'xtadi.", losses_in_row)
+        if state["losses_in_row"] >= MAX_LOSSES_IN_ROW:
+            log.info("Ketma-ket %d ta zarar. Bugun savdo yetarli — bot to'xtadi.", state["losses_in_row"])
             return "loss_limit"
 
-        candles = exchange.fetch_ohlcv(SYMBOL, TIMEFRAME, limit=EMA_SLOW + RSI_PERIOD + 50)
-        closed = candles[:-1]  # oxirgi sham hali yopilmagan
-        if not closed or closed[-1][0] == last_candle:
+        # Yangi sham yopilmaguncha qayta skan qilmaymiz (birinchi coin bo'yicha tekshiramiz)
+        head = exchange.fetch_ohlcv(symbols[0], TIMEFRAME, limit=2)
+        if len(head) < 2 or head[-2][0] == state["last_candle"]:
             sleep(POLL_SECONDS)
             return None
-        last_candle = closed[-1][0]
 
-        side = signal([c[4] for c in closed])
-        if side:
-            notional = bal * MARGIN_SHARE * LEVERAGE
-            contracts = contracts_for(exchange, notional, price)
-            if contracts <= 0:
-                log.warning("Balans minimal kontrakt uchun yetmaydi.")
-                sleep(POLL_SECONDS)
-                return None
-            sign = 1 if side == "long" else -1
-            tp = price * (1 + sign * TP_PCT / 100)
-            sl = price * (1 - sign * SL_PCT / 100)
-            entry_balance = bal
-            broker.open(side, contracts, price, sl, tp, notional)
-            log.info("%s ochildi @ %.2f | %.0f USDT pozitsiya | TP %.2f | SL %.2f",
-                     side.upper(), price, notional, tp, sl)
+        signals, report = scan(exchange, symbols)
+        state["last_candle"] = head[-2][0]
+        if not signals:
+            log.info("Skan: %d ta coin | signal yo'q | %s", len(symbols), report)
+            sleep(POLL_SECONDS)
+            return None
 
+        log.info("Skan: signallar — %s", ", ".join(f"{short(s)} {d.upper()}" for s, d in signals))
+        symbol, side = signals[0]
+        price = exchange.fetch_ticker(symbol)["last"]
+        notional = bal * MARGIN_SHARE * LEVERAGE
+        contracts = contracts_for(exchange, symbol, notional, price)
+        if contracts <= 0:
+            log.warning("%s: balans minimal kontrakt uchun yetmaydi.", short(symbol))
+            sleep(POLL_SECONDS)
+            return None
+        sign = 1 if side == "long" else -1
+        tp = price * (1 + sign * TP_PCT / 100)
+        sl = price * (1 - sign * SL_PCT / 100)
+        state["entry_balance"] = bal
+        broker.open(symbol, side, contracts, price, sl, tp, notional)
+        log.info("%s %s ochildi @ %s | %.0f USDT pozitsiya | TP %s | SL %s",
+                 short(symbol), side.upper(), exchange.price_to_precision(symbol, price), notional,
+                 exchange.price_to_precision(symbol, tp), exchange.price_to_precision(symbol, sl))
         sleep(POLL_SECONDS)
         return None
 
+    loops = 0
     while max_loops is None or loops < max_loops:
         loops += 1
         try:
             result = step()
         except ccxt.NetworkError as e:
-            log.warning("Tarmoq xatosi, %ds dan keyin qayta urinaman: %s", 10, e)
+            log.warning("Tarmoq xatosi, 10s dan keyin qayta urinaman: %s", e)
             sleep(10)
             continue
         if result:
@@ -354,9 +440,6 @@ def main():
     if MODE == "live":
         log.warning("⚠️  LIVE rejim: haqiqiy pul bilan savdo. To'xtatish uchun Ctrl+C.")
     try:
-        if MODE != "paper":
-            exchange.load_markets()
-            broker.setup()
         run(exchange, broker)
     except KeyboardInterrupt:
         log.info("To'xtatildi. Ochiq pozitsiya bo'lsa, %s ilovasida tekshiring!", EXCHANGE.upper())
