@@ -10,8 +10,14 @@ Rejimlar:
   demo  — Binance Demo Trading hisobi (demo.binance.com kalitlari, virtual pul)
   live  — haqiqiy pul
 
+Coinlar (universe.py):
+  - 24 soatlik hajm bo'yicha eng likvid TOP_COINS (50) ta USDT perpetual olinadi
+  - Grafigi o'xshash coinlar chiqariladi: soatlik narx o'zgarishlari korrelyatsiyasi
+    allaqachon tanlangan coin bilan CORR_MAX (0.8) dan yuqori bo'lsa (7 kunlik ma'lumot)
+  - Ro'yxat har REFRESH_HOURS (6) soatda yangilanadi
+
 Strategiya:
-  - Har bir yangi shamda (standart 5m) SYMBOLS dagi coinlar (standart 20 ta) tahlil qilinadi
+  - Har bir yangi shamda (standart 5m) tanlangan coinlar tahlil qilinadi
   - EMA9 EMA21 ni pastdan yuqoriga kesib o'tsa va RSI < 70 -> LONG
   - EMA9 EMA21 ni yuqoridan pastga kesib o'tsa va RSI > 30 -> SHORT
   - Marja = balansning MARGIN_PCT foizi (1%), leverage LEVERAGE (10x), isolated
@@ -23,6 +29,7 @@ Strategiya:
 Buyruqlar:
   python3 allin_bot.py              botni ishga tushirish
   python3 allin_bot.py --stats      statistika: balans, yutuq/zarar, kunlar va coinlar bo'yicha
+  python3 allin_bot.py --coins      qaysi coinlar tanlangani va qaysilari nega chiqarilgani
   python3 allin_bot.py --close      barcha ochiq pozitsiyalarni bozor narxida yopish
   python3 allin_bot.py --close SOL  faqat bitta coinni yopish
 """
@@ -40,6 +47,8 @@ from pathlib import Path
 import ccxt
 from dotenv import load_dotenv
 
+import universe  # coinlarni tanlash (shu papkadagi universe.py)
+
 HERE = Path(__file__).resolve().parent
 load_dotenv(HERE / ".env")
 
@@ -51,15 +60,16 @@ def env(name, default, cast=str):
     return cast(value) if value not in (None, "") else default
 
 
-# Likvidlik bo'yicha tartiblangan 20 ta USDT perpetual (Binance va MEXC'da bor)
-DEFAULT_SYMBOLS = (
-    "BTC,ETH,SOL,BNB,XRP,DOGE,ADA,AVAX,LINK,DOT,"
-    "LTC,TRX,NEAR,SUI,APT,ARB,OP,FIL,ATOM,AAVE"
-)
-
 EXCHANGE = env("EXCHANGE", "mexc").lower()       # mexc | binance
 MODE = env("MODE", "paper").lower()              # paper | demo | live
-SYMBOLS = [f"{c.strip().upper()}/USDT:USDT" for c in env("SYMBOLS", DEFAULT_SYMBOLS).split(",") if c.strip()]
+# Bo'sh bo'lsa coinlar avtomatik tanlanadi; to'ldirilsa (masalan BTC,ETH,SOL) — shu ro'yxat ishlatiladi
+SYMBOLS = [f"{c.strip().upper()}/USDT:USDT" for c in env("SYMBOLS", "").split(",") if c.strip()]
+TOP_COINS = env("TOP_COINS", 50, int)            # hajm bo'yicha nechta eng likvid coin ko'rib chiqiladi
+CORR_MAX = env("CORR_MAX", 0.8, float)           # korrelyatsiya shundan yuqori bo'lsa — "grafigi o'xshash"
+CORR_TIMEFRAME = env("CORR_TIMEFRAME", "1h")     # o'xshashlik qaysi shamlar bo'yicha o'lchanadi
+CORR_LOOKBACK = env("CORR_LOOKBACK", 168, int)   # nechta sham (168 × 1h = 7 kun)
+MIN_COINS = env("MIN_COINS", 10, int)            # kamida nechta coin qolsin
+REFRESH_HOURS = env("REFRESH_HOURS", 6, float)   # ro'yxat necha soatda bir yangilanadi
 TIMEFRAME = env("TIMEFRAME", "5m")
 LEVERAGE = env("LEVERAGE", 10, int)
 MARGIN_PCT = env("MARGIN_PCT", 1.0, float)       # har savdoga balansning necha foizi marja (1 = 1%)
@@ -190,7 +200,7 @@ class PaperBroker:
         self.positions = {}
         self.closed_queue = []
 
-    def setup(self, symbols):
+    def setup(self):
         pass
 
     def max_notional(self, symbol):
@@ -242,13 +252,13 @@ class LiveBroker:
         self.positions = {}
         self.closed_queue = []  # favqulodda yopilgan savdolar — keyingi poll() da qaytariladi
 
-    def setup(self, symbols):
-        """Bot qayta ishga tushirilganda birjada ochiq qolgan pozitsiyalarni topadi."""
-        for lp in self.ex.fetch_positions(symbols):
+    def setup(self):
+        """Bot qayta ishga tushirilganda birjada ochiq qolgan barcha USDT-M pozitsiyalarni topadi."""
+        for lp in self.ex.fetch_positions():
             contracts = float(lp.get("contracts") or 0)
-            if contracts <= 0:
+            symbol = lp.get("symbol") or ""
+            if contracts <= 0 or not symbol.endswith(":USDT"):
                 continue
-            symbol = lp["symbol"]
             entry = float(lp.get("entryPrice") or 0)
             qty = contracts * contract_size(self.ex, symbol)
             margin = float(lp.get("initialMargin") or 0) or qty * entry / LEVERAGE
@@ -591,12 +601,15 @@ def validate_config():
         sys.exit("MARGIN_PCT 0 dan katta va 100 dan kichik yoki teng bo'lishi kerak (1 = balansning 1%).")
     if MAX_POSITIONS < 1 or MARGIN_PCT * MAX_POSITIONS > 100:
         sys.exit("MAX_POSITIONS kamida 1, MARGIN_PCT × MAX_POSITIONS esa 100 dan oshmasligi kerak.")
-    if not SYMBOLS:
-        sys.exit("SYMBOLS bo'sh. Masalan: SYMBOLS=BTC,ETH,SOL")
-    try:
-        ccxt.Exchange.parse_timeframe(TIMEFRAME)
-    except Exception:
-        sys.exit(f"TIMEFRAME={TIMEFRAME} noto'g'ri. Masalan: 1m, 5m, 15m, 1h")
+    if not 0 < CORR_MAX <= 1:
+        sys.exit("CORR_MAX 0 dan katta va 1 dan kichik yoki teng bo'lishi kerak (1 = o'xshashlik filtri o'chiq).")
+    if TOP_COINS < 1 or MIN_COINS < 1 or CORR_LOOKBACK < 24:
+        sys.exit("TOP_COINS va MIN_COINS kamida 1, CORR_LOOKBACK kamida 24 bo'lishi kerak.")
+    for name, tf in (("TIMEFRAME", TIMEFRAME), ("CORR_TIMEFRAME", CORR_TIMEFRAME)):
+        try:
+            ccxt.Exchange.parse_timeframe(tf)
+        except Exception:
+            sys.exit(f"{name}={tf} noto'g'ri. Masalan: 1m, 5m, 15m, 1h")
 
 
 def has_keys():
@@ -623,12 +636,59 @@ def make_broker(exchange):
     return BinanceBroker(exchange) if EXCHANGE == "binance" else LiveBroker(exchange)
 
 
-def available_symbols(exchange, symbols):
-    ok = [s for s in symbols if s in exchange.markets and exchange.markets[s].get("active", True) is not False]
-    missing = [short(s) for s in symbols if s not in ok]
-    if missing:
-        log.warning("Birjada topilmadi, o'tkazib yuboriladi: %s", ", ".join(missing))
-    return ok
+def select(exchange):
+    log.info("🪙 Coinlar tanlanmoqda: hajm va %s shamlar yuklanmoqda (10–30 soniya)...", CORR_TIMEFRAME)
+    return universe.select_coins(exchange, TOP_COINS, CORR_TIMEFRAME, CORR_LOOKBACK, CORR_MAX, MIN_COINS,
+                                 symbols=SYMBOLS or None, log=log)
+
+
+def selection_title(res):
+    if res["source"] == "list":
+        return f"SYMBOLS ro'yxatidagi {len(SYMBOLS)} ta coin"
+    return f"hajm bo'yicha top {TOP_COINS}" + (" (zaxira ro'yxat)" if res["source"] == "fallback" else "")
+
+
+def choose_coins(exchange):
+    """Savdo qilinadigan coinlar: eng likvidlari, grafigi o'xshashlari chiqarilgan."""
+    res = select(exchange)
+    kept = res["kept"]
+    log.info("🪙 Coinlar: %s → grafigi o'xshashlar chiqarildi (korrelyatsiya ≥ %.2f) → %d ta coin",
+             selection_title(res), CORR_MAX, len(kept))
+    log.info("   Tanlandi: %s", ", ".join(short(s) for s in kept) or "—")
+    if res["similar"]:
+        log.info("   O'xshash, chiqarildi (%d): %s", len(res["similar"]),
+                 ", ".join(f"{short(s)}~{short(k)} {c:.2f}" for s, k, c in res["similar"]))
+    if res["short"]:
+        log.info("   Tarixi yetarli emas (%d): %s", len(res["short"]), ", ".join(short(s) for s in res["short"]))
+    if res["missing"]:
+        log.warning("   Birjada topilmadi: %s", ", ".join(short(s) for s in res["missing"]))
+    return kept
+
+
+def print_coins(exchange):
+    """`--coins`: tanlangan va chiqarilgan coinlar jadvali."""
+    exchange.load_markets()
+    res = select(exchange)
+    vols = res["volumes"]
+
+    def volume(s):
+        return f"{vols[s] / 1e6:>10,.0f} mln $" if vols.get(s) else ""
+
+    print(f"\n========== 🪙 COINLAR — {EXCHANGE.upper()} {MODE} ==========")
+    print(f"{selection_title(res)} → o'xshashlik chegarasi {CORR_MAX:.2f} "
+          f"({CORR_TIMEFRAME} × {CORR_LOOKBACK} sham)\n")
+    print(f"✅ Tanlandi ({len(res['kept'])}):")
+    for s in res["kept"]:
+        print(f"  {short(s):<10}{volume(s)}")
+    if res["similar"]:
+        print(f"\n❌ Grafigi o'xshash — chiqarildi ({len(res['similar'])}):")
+        for s, k, c in res["similar"]:
+            print(f"  {short(s):<10} ~ {short(k):<10} korrelyatsiya {c:.2f}")
+    if res["short"]:
+        print(f"\n⏳ Tarixi yetarli emas ({len(res['short'])}): " + ", ".join(short(s) for s in res["short"]))
+    if res["missing"]:
+        print("\n⚠️  Birjada topilmadi: " + ", ".join(short(s) for s in res["missing"]))
+    print()
 
 
 def log_settings(balance):
@@ -639,6 +699,9 @@ def log_settings(balance):
              MARGIN_PCT, LEVERAGE, TP_PCT, SL_PCT, TIMEFRAME, MAX_POSITIONS, DAILY_LOSS_PCT)
     log.info("Hozirgi balansda bitta savdo: marja ≈ %.2f USDT → pozitsiya %.0f USDT | TP ≈ %+.2f USDT | "
              "SL ≈ %+.2f USDT (komissiyasiz)", margin, notional, notional * TP_PCT / 100, -notional * SL_PCT / 100)
+    log.info("Coin tanlash: top %d (hajm bo'yicha), o'xshashlik chegarasi %.2f (%s × %d), kamida %d ta, "
+             "har %.4g soatda yangilanadi", TOP_COINS, CORR_MAX, CORR_TIMEFRAME, CORR_LOOKBACK, MIN_COINS,
+             REFRESH_HOURS)
     legacy = [k for k in LEGACY_KEYS if os.getenv(k)]
     if legacy:
         log.warning("⚠️  .env faylida eski versiya sozlamalari bor (%s). Ular endi ishlatilmaydi, lekin "
@@ -710,17 +773,33 @@ def open_trade(exchange, broker, symbol, side, balance):
     return True
 
 
-def run(exchange, broker, journal, symbols=None, sleep=time.sleep, clock=time.time, max_loops=None):
+def run(exchange, broker, journal, pick_coins=choose_coins, sleep=time.sleep, clock=time.time, max_loops=None):
     exchange.load_markets()
-    symbols = available_symbols(exchange, symbols or SYMBOLS)
-    if not symbols:
-        sys.exit("Ro'yxatdagi birorta coin birjada topilmadi.")
-    broker.setup(symbols)
-    log.info("%s | rejim=%s | %d ta coin | balans %.2f USDT", EXCHANGE.upper(), MODE, len(symbols), broker.balance())
-    log.info("Coinlar: %s", ", ".join(short(s) for s in symbols))
+    broker.setup()
+    log.info("%s | rejim=%s | balans %.2f USDT", EXCHANGE.upper(), MODE, broker.balance())
     log_settings(broker.balance())
+    coins = pick_coins(exchange)
+    if not coins:
+        sys.exit("Birorta coin tanlanmadi — SYMBOLS yoki TOP_COINS sozlamasini tekshiring.")
     candle_seconds = ccxt.Exchange.parse_timeframe(TIMEFRAME)
-    state = dict(last_candle=None, last_status=None, paused_day=None, cooldown={})
+    state = dict(last_candle=None, last_status=None, paused_day=None, cooldown={}, coins=coins, coins_at=clock())
+
+    def refresh_coins():
+        state["coins_at"] = clock()
+        try:
+            new = pick_coins(exchange)
+        except ccxt.BaseError as e:
+            log.warning("Coinlar ro'yxatini yangilab bo'lmadi (%s) — eskisi bilan davom etaman.", e)
+            return
+        if not new:
+            log.warning("Yangi coinlar ro'yxati bo'sh chiqdi — eskisi bilan davom etaman.")
+            return
+        added = [short(s) for s in new if s not in state["coins"]]
+        removed = [short(s) for s in state["coins"] if s not in new]
+        if added or removed:
+            log.info("🪙 Coinlar ro'yxati yangilandi: qo'shildi %s | chiqarildi %s",
+                     ", ".join(added) or "—", ", ".join(removed) or "—")
+        state["coins"] = new
 
     def step():
         for trade in broker.poll():
@@ -731,6 +810,8 @@ def run(exchange, broker, journal, symbols=None, sleep=time.sleep, clock=time.ti
         if state["last_status"] is None or clock() - state["last_status"] >= STATUS_MINUTES * 60:
             state["last_status"] = clock()
             report_status(broker, journal)
+        if clock() - state["coins_at"] >= REFRESH_HOURS * 3600:
+            refresh_coins()
 
         if len(broker.positions) >= MAX_POSITIONS:
             return None
@@ -750,10 +831,11 @@ def run(exchange, broker, journal, symbols=None, sleep=time.sleep, clock=time.ti
             return None
 
         # Yangi sham yopilmaguncha qayta skan qilmaymiz (birinchi coin bo'yicha tekshiramiz)
-        head = exchange.fetch_ohlcv(symbols[0], TIMEFRAME, limit=2)
+        coins = state["coins"]
+        head = exchange.fetch_ohlcv(coins[0], TIMEFRAME, limit=2)
         if len(head) < 2 or head[-2][0] == state["last_candle"]:
             return None
-        candidates = [s for s in symbols
+        candidates = [s for s in coins
                       if s not in broker.positions and state["cooldown"].get(s, 0) <= clock()]
         signals, report = scan(exchange, candidates)
         state["last_candle"] = head[-2][0]
@@ -797,7 +879,7 @@ def close_positions(exchange, broker, journal, coin=None):
     if MODE == "paper":
         sys.exit("paper rejimda birjada pozitsiya yo'q (virtual pozitsiyalar bot to'xtaganda yo'qoladi).")
     exchange.load_markets()
-    broker.setup(available_symbols(exchange, SYMBOLS))
+    broker.setup()
     targets = [s for s in list(broker.positions) if coin is None or short(s) == coin.upper()]
     if not targets:
         log.info("Ochiq pozitsiya yo'q.")
@@ -812,8 +894,8 @@ def live_snapshot(exchange):
     """--stats uchun birjadagi joriy balans va ochiq pozitsiyalar."""
     exchange.load_markets()
     bal = exchange.fetch_balance()["USDT"]
-    positions = [p for p in exchange.fetch_positions(available_symbols(exchange, SYMBOLS))
-                 if float(p.get("contracts") or 0) > 0]
+    positions = [p for p in exchange.fetch_positions()
+                 if float(p.get("contracts") or 0) > 0 and (p.get("symbol") or "").endswith(":USDT")]
     return dict(total=float(bal.get("total") or 0), free=float(bal.get("free") or 0), positions=positions)
 
 
@@ -822,10 +904,12 @@ def main():
     parser.add_argument("--stats", action="store_true", help="statistikani ko'rsatish")
     parser.add_argument("--close", nargs="?", const="ALL", metavar="COIN",
                         help="ochiq pozitsiyalarni yopish (hammasi yoki bitta coin: --close SOL)")
+    parser.add_argument("--coins", action="store_true",
+                        help="qaysi coinlar tanlangani va qaysilari nega chiqarilganini ko'rsatish")
     args = parser.parse_args()
 
     handlers = [logging.StreamHandler()]
-    if not args.stats:
+    if not (args.stats or args.coins):
         handlers.append(logging.handlers.RotatingFileHandler(LOG_PATH, maxBytes=5_000_000, backupCount=3,
                                                              encoding="utf-8"))
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S",
@@ -844,6 +928,9 @@ def main():
 
     validate_config()
     exchange = make_exchange()
+    if args.coins:
+        print_coins(exchange)
+        return
     broker = make_broker(exchange)
     if args.close:
         close_positions(exchange, broker, journal, None if args.close == "ALL" else args.close)
