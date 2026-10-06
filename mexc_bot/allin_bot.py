@@ -192,7 +192,10 @@ class BinanceBroker(LiveBroker):
     """Binance USDT-M futures (demo yoki haqiqiy). SL/TP alohida algo orderlar sifatida."""
 
     def setup(self):
-        self.ex.set_margin_mode("isolated", SYMBOL)
+        try:
+            self.ex.set_margin_mode("isolated", SYMBOL)
+        except ccxt.MarginModeAlreadySet:
+            pass  # allaqachon isolated
         self.ex.set_leverage(LEVERAGE, SYMBOL)
 
     def _cancel_triggers(self):
@@ -274,13 +277,13 @@ def run(exchange, broker, sleep=time.sleep, max_loops=None):
     start = broker.balance()
     losses_in_row = 0
     last_candle = None
-    entry_balance = None
+    entry_balance = start  # qayta ishga tushirilganda ochiq pozitsiya bo'lsa ham ishlaydi
     loops = 0
     log.info("%s | rejim=%s %s %dx | boshlang'ich balans %.2f USDT | maqsad %.1fx",
              EXCHANGE.upper(), MODE, SYMBOL, LEVERAGE, start, TARGET_X)
 
-    while max_loops is None or loops < max_loops:
-        loops += 1
+    def step():
+        nonlocal losses_in_row, last_candle, entry_balance
         price = exchange.fetch_ticker(SYMBOL)["last"]
 
         if broker.has_position():
@@ -291,7 +294,7 @@ def run(exchange, broker, sleep=time.sleep, max_loops=None):
                 log.info("Pozitsiya yopildi: %+.2f USDT | balans %.2f USDT (%.2fx)",
                          result, bal, bal / start)
             sleep(POLL_SECONDS)
-            continue
+            return None
 
         bal = broker.balance()
         if bal >= start * TARGET_X:
@@ -308,7 +311,7 @@ def run(exchange, broker, sleep=time.sleep, max_loops=None):
         closed = candles[:-1]  # oxirgi sham hali yopilmagan
         if not closed or closed[-1][0] == last_candle:
             sleep(POLL_SECONDS)
-            continue
+            return None
         last_candle = closed[-1][0]
 
         side = signal([c[4] for c in closed])
@@ -318,7 +321,7 @@ def run(exchange, broker, sleep=time.sleep, max_loops=None):
             if contracts <= 0:
                 log.warning("Balans minimal kontrakt uchun yetmaydi.")
                 sleep(POLL_SECONDS)
-                continue
+                return None
             sign = 1 if side == "long" else -1
             tp = price * (1 + sign * TP_PCT / 100)
             sl = price * (1 - sign * SL_PCT / 100)
@@ -328,6 +331,18 @@ def run(exchange, broker, sleep=time.sleep, max_loops=None):
                      side.upper(), price, notional, tp, sl)
 
         sleep(POLL_SECONDS)
+        return None
+
+    while max_loops is None or loops < max_loops:
+        loops += 1
+        try:
+            result = step()
+        except ccxt.NetworkError as e:
+            log.warning("Tarmoq xatosi, %ds dan keyin qayta urinaman: %s", 10, e)
+            sleep(10)
+            continue
+        if result:
+            return result
     return "max_loops"
 
 
