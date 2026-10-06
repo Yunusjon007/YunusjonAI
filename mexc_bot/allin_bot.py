@@ -1,8 +1,13 @@
 """
-MEXC Futures — "All-in + yuqori leverage" scalping bot.
+MEXC / Binance Futures — "All-in + yuqori leverage" scalping bot.
 
 DIQQAT: bu eng xavfli razgon usuli. Bitta xato savdo depozitning katta qismini
 olib ketishi mumkin. Standart rejim MODE=paper (haqiqiy pul ishlatilmaydi).
+
+Rejimlar:
+  paper — haqiqiy narxlar, virtual balans (API kalit kerak emas)
+  demo  — Binance Demo Trading hisobi (demo.binance.com kalitlari, virtual pul)
+  live  — haqiqiy pul
 
 Strategiya:
   - 1 daqiqalik shamlarda EMA(9) va EMA(21) kesishishi + RSI filtri
@@ -30,14 +35,15 @@ def env(name, default, cast=str):
     return cast(value) if value not in (None, "") else default
 
 
-MODE = env("MODE", "paper").lower()              # paper | live
+EXCHANGE = env("EXCHANGE", "mexc").lower()       # mexc | binance
+MODE = env("MODE", "paper").lower()              # paper | demo | live
 SYMBOL = env("SYMBOL", "BTC/USDT:USDT")
 TIMEFRAME = env("TIMEFRAME", "1m")
 LEVERAGE = env("LEVERAGE", 20, int)
 MARGIN_SHARE = env("MARGIN_SHARE", 0.95, float)  # balansning qancha qismi marjaga (0.95 = 95%)
 TP_PCT = env("TP_PCT", 1.0, float)               # narx o'zgarishi %, 20x da 1% = +20% depozit
 SL_PCT = env("SL_PCT", 0.5, float)               # narx o'zgarishi %, 20x da 0.5% = -10% depozit
-FEE_PCT = env("FEE_PCT", 0.02, float)            # taker komissiya, har bir tomon uchun %
+FEE_PCT = env("FEE_PCT", 0.05 if EXCHANGE == "binance" else 0.02, float)  # taker, har tomon %
 EMA_FAST = env("EMA_FAST", 9, int)
 EMA_SLOW = env("EMA_SLOW", 21, int)
 RSI_PERIOD = env("RSI_PERIOD", 14, int)
@@ -137,6 +143,9 @@ class LiveBroker:
     def __init__(self, exchange):
         self.ex = exchange
 
+    def setup(self):
+        pass
+
     def balance(self):
         bal = self.ex.fetch_balance()
         return float(bal["USDT"]["total"] or 0)
@@ -176,6 +185,44 @@ class LiveBroker:
         )
 
 
+class BinanceBroker(LiveBroker):
+    """Binance USDT-M futures (demo yoki haqiqiy). SL/TP alohida algo orderlar sifatida."""
+
+    def setup(self):
+        self.ex.set_margin_mode("isolated", SYMBOL)
+        self.ex.set_leverage(LEVERAGE, SYMBOL)
+
+    def _cancel_triggers(self):
+        try:
+            self.ex.cancel_all_orders(SYMBOL, params={"trigger": True})
+        except ccxt.BaseError as e:
+            log.warning("SL/TP orderlarni bekor qilib bo'lmadi: %s", e)
+
+    def open(self, side, contracts, price, sl, tp, notional):
+        entry_side, exit_side = ("buy", "sell") if side == "long" else ("sell", "buy")
+        self.ex.create_order(SYMBOL, "market", entry_side, contracts)
+        try:
+            self.ex.create_order(SYMBOL, "market", exit_side, contracts,
+                                 params={"stopLossPrice": sl, "reduceOnly": True})
+            self.ex.create_order(SYMBOL, "market", exit_side, contracts,
+                                 params={"takeProfitPrice": tp, "reduceOnly": True})
+        except ccxt.BaseError as e:
+            # Stop-losssiz all-in pozitsiyani ochiq qoldirmaymiz
+            log.error("SL/TP qo'yilmadi (%s) — pozitsiya darhol yopiladi.", e)
+            self.close(price)
+            raise
+
+    def check_exit(self, price):
+        if self.has_position():
+            return False
+        self._cancel_triggers()  # TP ishlasa SL qoladi (yoki aksincha) — tozalaymiz
+        return True
+
+    def close(self, price):
+        super().close(price)
+        self._cancel_triggers()
+
+
 # ---------------------------------------------------------------- asosiy sikl
 
 def validate_config():
@@ -183,20 +230,34 @@ def validate_config():
     if SL_PCT >= liq_distance:
         sys.exit(f"SL_PCT={SL_PCT}% likvidatsiya masofasidan (~{liq_distance:.2f}%) katta yoki teng. "
                  f"SL_PCT ni kamaytiring yoki LEVERAGE ni pasaytiring.")
-    if MODE not in ("paper", "live"):
-        sys.exit("MODE faqat 'paper' yoki 'live' bo'lishi mumkin.")
+    if EXCHANGE not in ("mexc", "binance"):
+        sys.exit("EXCHANGE faqat 'mexc' yoki 'binance' bo'lishi mumkin.")
+    if MODE not in ("paper", "demo", "live"):
+        sys.exit("MODE faqat 'paper', 'demo' yoki 'live' bo'lishi mumkin.")
+    if MODE == "demo" and EXCHANGE != "binance":
+        sys.exit("demo rejim faqat Binance uchun (MEXC futures demo API bermaydi). MODE=paper ishlating.")
     if not 0 < MARGIN_SHARE <= 1:
         sys.exit("MARGIN_SHARE 0 dan katta va 1 dan kichik yoki teng bo'lishi kerak.")
 
 
 def make_exchange():
     config = {"enableRateLimit": True, "options": {"defaultType": "swap"}}
-    if MODE == "live":
-        key, secret = os.getenv("MEXC_API_KEY"), os.getenv("MEXC_SECRET")
+    if MODE != "paper":
+        prefix = EXCHANGE.upper()
+        key, secret = os.getenv(f"{prefix}_API_KEY"), os.getenv(f"{prefix}_SECRET")
         if not key or not secret:
-            sys.exit("live rejim uchun .env faylida MEXC_API_KEY va MEXC_SECRET kerak.")
+            sys.exit(f"{MODE} rejim uchun .env faylida {prefix}_API_KEY va {prefix}_SECRET kerak.")
         config.update(apiKey=key, secret=secret)
-    return ccxt.mexc(config)
+    exchange = getattr(ccxt, EXCHANGE)(config)
+    if MODE == "demo":
+        exchange.enable_demo_trading(True)
+    return exchange
+
+
+def make_broker(exchange):
+    if MODE == "paper":
+        return PaperBroker(exchange, PAPER_BALANCE)
+    return BinanceBroker(exchange) if EXCHANGE == "binance" else LiveBroker(exchange)
 
 
 def contracts_for(exchange, notional, price):
@@ -212,8 +273,8 @@ def run(exchange, broker, sleep=time.sleep, max_loops=None):
     last_candle = None
     entry_balance = None
     loops = 0
-    log.info("Rejim=%s %s %dx | boshlang'ich balans %.2f USDT | maqsad %.1fx",
-             MODE, SYMBOL, LEVERAGE, start, TARGET_X)
+    log.info("%s | rejim=%s %s %dx | boshlang'ich balans %.2f USDT | maqsad %.1fx",
+             EXCHANGE.upper(), MODE, SYMBOL, LEVERAGE, start, TARGET_X)
 
     while max_loops is None or loops < max_loops:
         loops += 1
@@ -271,13 +332,16 @@ def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
     validate_config()
     exchange = make_exchange()
-    broker = LiveBroker(exchange) if MODE == "live" else PaperBroker(exchange, PAPER_BALANCE)
+    broker = make_broker(exchange)
     if MODE == "live":
         log.warning("⚠️  LIVE rejim: haqiqiy pul bilan savdo. To'xtatish uchun Ctrl+C.")
     try:
+        if MODE != "paper":
+            exchange.load_markets()
+            broker.setup()
         run(exchange, broker)
     except KeyboardInterrupt:
-        log.info("To'xtatildi. Ochiq pozitsiya bo'lsa, MEXC ilovasida tekshiring!")
+        log.info("To'xtatildi. Ochiq pozitsiya bo'lsa, %s ilovasida tekshiring!", EXCHANGE.upper())
 
 
 if __name__ == "__main__":

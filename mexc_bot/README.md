@@ -1,28 +1,42 @@
-# MEXC All-in scalping bot
+# All-in scalping bot (MEXC / Binance futures)
 
 ⚠️ **Eng xavfli razgon usuli.** 20x leverage bilan narx ~4.6% qarshi yursa, butun marja ketadi.
 Faqat yo'qotishga tayyor pul bilan ishlating. Bu moliyaviy maslahat emas.
 
-## Ishga tushirish
+## Rejimlar
+| `MODE` | Nima | Kalit |
+|---|---|---|
+| `paper` | Haqiqiy narxlar, virtual balans (bot ichida) | kerak emas |
+| `demo` | **Binance Demo Trading** — virtual pul, haqiqiy birja orderlari | demo.binance.com kalitlari |
+| `live` | Haqiqiy pul | asosiy hisob kalitlari |
+
+## Binance demo bilan sinash
+1. https://demo.binance.com ga Binance akkauntingiz bilan kiring.
+2. Profil → **API Management** → yangi API kalit yarating (bu demo kalit, asosiy hisobniki emas).
+3. Futures demo hisobida USDT balans borligini tekshiring.
+4. Futures sozlamalarida **One-way mode** yoqilgan bo'lsin (Hedge mode emas).
+5. Ishga tushiring:
 
 ```bash
 cd mexc_bot
 pip install -r requirements.txt
-cp .env.example .env      # sozlamalarni tahrirlang
-python allin_bot.py       # MODE=paper — virtual 100 USDT bilan
+cp .env.example .env      # EXCHANGE=binance, MODE=demo va kalitlarni yozing
+python allin_bot.py
 ```
 
-Kamida 1–2 hafta `paper` rejimda kuzating. Keyin `.env` da `MODE=live` va API kalitlarni yozing.
+Bot ochgan pozitsiya va SL/TP orderlarni demo.binance.com da ko'rasiz.
 
 ## Strategiya
 - 1m shamlar: EMA9 / EMA21 kesishishi + RSI filtri
 - Depozitning 95% i marja, isolated, 20x
 - TP +1% narx (≈ +20% depozit), SL −0.5% narx (≈ −10% depozit)
+- SL/TP birjaga qo'yiladi; SL qo'yilmasa, pozitsiya darhol yopiladi (Binance)
 - To'xtash: 4x maqsad, ketma-ket 3 zarar yoki balans < 5 USDT
 
 ## Sozlamalar (.env)
 | O'zgaruvchi | Ma'nosi |
 |---|---|
+| `EXCHANGE` | `binance` yoki `mexc` |
 | `LEVERAGE` | Leverage (bot SL likvidatsiyadan oldin turishini tekshiradi) |
 | `MARGIN_SHARE` | Balansning qancha qismi bitta savdoga (1 = to'liq all-in) |
 | `TP_PCT` / `SL_PCT` | Narx o'zgarishi foizi |
@@ -31,5 +45,5 @@ Kamida 1–2 hafta `paper` rejimda kuzating. Keyin `.env` da `MODE=live` va API 
 
 ## Xavfsizlik
 - API kalitga **Withdraw ruxsatini bermang**, IP cheklovini qo'ying.
-- SL/TP birjaga ham qo'yiladi, lekin birinchi live savdoda MEXC ilovasida ko'rinishini tekshiring.
-- Bot to'xtatilganda ochiq pozitsiyani ilovada tekshiring.
+- MEXC'da futures demo API yo'q — u yerda `paper` rejimdan foydalaning.
+- Bot to'xtatilganda ochiq pozitsiya va orderlarni ilovada tekshiring.
