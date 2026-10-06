@@ -88,6 +88,9 @@ def signal(closes):
         return None
     fast, slow = ema(closes, EMA_FAST), ema(closes, EMA_SLOW)
     r = rsi(closes, RSI_PERIOD)
+    trend = "EMA9 yuqorida" if fast[-1] > slow[-1] else "EMA9 pastda"
+    log.info("Kutilmoqda | narx %.2f | EMA%d %.2f | EMA%d %.2f (%s) | RSI %.1f",
+             closes[-1], EMA_FAST, fast[-1], EMA_SLOW, slow[-1], trend, r)
     if fast[-2] <= slow[-2] and fast[-1] > slow[-1] and r < 70:
         return "long"
     if fast[-2] >= slow[-2] and fast[-1] < slow[-1] and r > 30:
