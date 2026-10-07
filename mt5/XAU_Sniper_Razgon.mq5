@@ -53,6 +53,7 @@ input int    InpFridayHour   = 20;     // Juma, server vaqti: shu soatda yopilad
 input group "Boshqa"
 input long   InpMagic        = 770077; // EA savdolari belgisi (magic number)
 input double InpSlippageUSD  = 0.50;   // Ruxsat etilgan sirpanish ($)
+input bool   InpPush         = true;   // Telefonga push xabar (MT5 sozlamalarida MetaQuotes ID kerak)
 
 CTrade   trade;
 int      hD1  = INVALID_HANDLE;
@@ -67,8 +68,13 @@ datetime g_lastBar = 0;
 int      g_today   = 0;
 string   g_state   = "ishga tushdi";
 bool     g_tester  = false;
+datetime g_since   = 0;     // statistika shu vaqtdan hisoblanadi
+int      g_wins    = 0;
+int      g_losses  = 0;
+double   g_net     = 0.0;
 string   GV_START;
 string   GV_DONE;
+string   GV_SINCE;
 
 //+------------------------------------------------------------------+
 int OnInit()
@@ -100,10 +106,12 @@ int OnInit()
    g_tester = MQLInfoInteger(MQL_TESTER) != 0;
    GV_START = "XSR_" + _Symbol + "_" + IntegerToString(InpMagic) + "_start";
    GV_DONE  = "XSR_" + _Symbol + "_" + IntegerToString(InpMagic) + "_done";
+   GV_SINCE = "XSR_" + _Symbol + "_" + IntegerToString(InpMagic) + "_since";
    if(InpResetGoal && !g_tester)
      {
       GlobalVariableDel(GV_START);
       GlobalVariableDel(GV_DONE);
+      GlobalVariableDel(GV_SINCE);
      }
    if(InpStartBalance > 0)
       g_start = InpStartBalance;
@@ -112,9 +120,17 @@ int OnInit()
          g_start = GlobalVariableGet(GV_START);
       else
          g_start = AccountInfoDouble(ACCOUNT_BALANCE);
+   if(!g_tester && GlobalVariableCheck(GV_SINCE))
+      g_since = (datetime)GlobalVariableGet(GV_SINCE);
+   else
+      g_since = TimeCurrent();
    if(!g_tester)
+     {
       GlobalVariableSet(GV_START, g_start);
+      GlobalVariableSet(GV_SINCE, (double)g_since);
+     }
    g_done = !g_tester && GlobalVariableCheck(GV_DONE) && GlobalVariableGet(GV_DONE) > 0;
+   UpdateStats();
 
    PrintFormat("XAU Sniper Razgon: boshlanish %.2f, maqsad %.2fx = %.2f, risk %.1f%%, RR 1:%.1f",
                g_start, InpGoalX, g_start * InpGoalX, InpRiskPercent, InpRR);
@@ -426,10 +442,11 @@ void ShowPanel(const string state)
                         "Boshlanish: %.2f   Hozir: %.2f  (%.2fx)\n"
                         "Maqsad: %.1fx = %.2f   |   risk %.0f%%   RR 1:%.1f\n"
                         "Bugungi savdolar: %d / %d\n"
+                        "Natija: %d savdo (foyda %d, zarar %d), jami %+.2f\n"
                         "Holat: %s",
                         _Symbol, g_start, eq, g_start > 0 ? eq / g_start : 0.0,
                         InpGoalX, g_start * InpGoalX, InpRiskPercent, InpRR,
-                        g_today, InpMaxTradesDay, state));
+                        g_today, InpMaxTradesDay, g_wins + g_losses, g_wins, g_losses, g_net, state));
   }
 
 //+------------------------------------------------------------------+
@@ -451,7 +468,9 @@ void OnTick()
       g_done = true;
       if(!g_tester)
          GlobalVariableSet(GV_DONE, 1.0);
-      Alert(StringFormat("XAU Sniper Razgon: MAQSAD BAJARILDI! Balans %.2f (%.2fx)", equity, equity / g_start));
+      string msg = StringFormat("XAU Sniper Razgon: MAQSAD BAJARILDI! Balans %.2f (%.2fx)", equity, equity / g_start);
+      Alert(msg);
+      Notify(msg);
       ShowPanel("MAQSAD BAJARILDI");
       return;
      }
@@ -522,9 +541,111 @@ void TryEnter()
      {
       g_today++;
       g_state = StringFormat("%s %.2f lot @ %.2f | SL %.2f | TP %.2f", dir > 0 ? "BUY" : "SELL", lots, entry, sl, tp);
+      Notify("XSR " + _Symbol + " " + g_state);
      }
    else
+     {
       g_state = StringFormat("order xatosi: %u %s", rc, trade.ResultRetcodeDescription());
-   Print(g_state);
+      Print(g_state);
+     }
+  }
+
+//+------------------------------------------------------------------+
+//| Terminal jurnaliga yozish + telefonga push                        |
+//+------------------------------------------------------------------+
+void Notify(const string msg)
+  {
+   Print(msg);
+   if(!InpPush || g_tester)
+      return;
+   static bool warned = false;
+   if(!SendNotification(msg) && !warned)
+     {
+      warned = true;
+      Print("Push yuborilmadi: MT5 -> Tools -> Options -> Notifications da MetaQuotes ID ni kiriting");
+     }
+  }
+
+//+------------------------------------------------------------------+
+//| g_since dan beri shu EA yopgan savdolar: foyda/zarar soni, jami   |
+//+------------------------------------------------------------------+
+void UpdateStats()
+  {
+   g_wins   = 0;
+   g_losses = 0;
+   g_net    = 0.0;
+   if(!HistorySelect(g_since, TimeCurrent() + 60))
+      return;
+   int total = HistoryDealsTotal();
+   long own[];
+   int n_own = 0;
+   for(int i = 0; i < total; i++)
+     {
+      ulong deal = HistoryDealGetTicket(i);
+      if(deal == 0)
+         continue;
+      if(HistoryDealGetString(deal, DEAL_SYMBOL) == _Symbol &&
+         HistoryDealGetInteger(deal, DEAL_MAGIC) == InpMagic &&
+         (ENUM_DEAL_ENTRY)HistoryDealGetInteger(deal, DEAL_ENTRY) == DEAL_ENTRY_IN)
+        {
+         ArrayResize(own, n_own + 1);
+         own[n_own] = HistoryDealGetInteger(deal, DEAL_POSITION_ID);
+         n_own++;
+         g_net += HistoryDealGetDouble(deal, DEAL_COMMISSION);
+        }
+     }
+   for(int i = 0; i < total; i++)
+     {
+      ulong deal = HistoryDealGetTicket(i);
+      if(deal == 0)
+         continue;
+      ENUM_DEAL_ENTRY entry = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(deal, DEAL_ENTRY);
+      if(entry != DEAL_ENTRY_OUT && entry != DEAL_ENTRY_OUT_BY)
+         continue;
+      long pos = HistoryDealGetInteger(deal, DEAL_POSITION_ID);
+      bool mine = false;
+      for(int j = 0; j < n_own && !mine; j++)
+         mine = (own[j] == pos);
+      if(!mine)
+         continue;
+      double pnl = HistoryDealGetDouble(deal, DEAL_PROFIT) + HistoryDealGetDouble(deal, DEAL_SWAP) +
+                   HistoryDealGetDouble(deal, DEAL_COMMISSION);
+      g_net += pnl;
+      if(pnl > 0)
+         g_wins++;
+      else
+         g_losses++;
+     }
+  }
+
+//+------------------------------------------------------------------+
+//| Savdo yopilganda: statistika va telefonga xabar                   |
+//+------------------------------------------------------------------+
+void OnTradeTransaction(const MqlTradeTransaction &trans,
+                        const MqlTradeRequest &request,
+                        const MqlTradeResult &result)
+  {
+   if(trans.type != TRADE_TRANSACTION_DEAL_ADD || trans.symbol != _Symbol)
+      return;
+   if(!HistoryDealSelect(trans.deal))
+      return;
+   ENUM_DEAL_ENTRY entry = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
+   if(entry != DEAL_ENTRY_OUT && entry != DEAL_ENTRY_OUT_BY)
+      return;
+   double pnl = HistoryDealGetDouble(trans.deal, DEAL_PROFIT) + HistoryDealGetDouble(trans.deal, DEAL_SWAP) +
+                HistoryDealGetDouble(trans.deal, DEAL_COMMISSION);
+   ENUM_DEAL_REASON why = (ENUM_DEAL_REASON)HistoryDealGetInteger(trans.deal, DEAL_REASON);
+   int before = g_wins + g_losses;
+   UpdateStats();
+   if(g_wins + g_losses == before)
+      return;   // bu EA ning pozitsiyasi emas
+   string tag = "yopildi";
+   if(why == DEAL_REASON_TP)
+      tag = "TP";
+   if(why == DEAL_REASON_SL)
+      tag = "SL";
+   double bal = AccountInfoDouble(ACCOUNT_BALANCE);
+   Notify(StringFormat("XSR %s %s: %+.2f | balans %.2f (%.2fx)", _Symbol, tag, pnl, bal,
+                       g_start > 0 ? bal / g_start : 0.0));
   }
 //+------------------------------------------------------------------+

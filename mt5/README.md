@@ -2,12 +2,12 @@
 
 `XAU_Sniper_Razgon.mq5` — XAUUSD / XAUUSDc uchun avtomatik savdo dasturi (EA, "sovetnik").
 U to'rtta timeframe'ni tekshiradi va hammasi bir tomonga qaraganda "sniper" kirish qiladi:
-SL kichik, TP SL'dan 3 baravar uzoq, lot katta. Balans 4 baravar bo'lsa hamma pozitsiyani yopadi
+SL yaqin tublik (cho'qqi) ortida, TP SL'dan 3 baravar uzoq, lot katta. Balans 4 baravar bo'lsa hamma pozitsiyani yopadi
 va o'zini to'xtatadi.
 
-> ⚠️ **Avval o'qing:** 1 haftada 4x — bu kafolat emas, bu lotereyaga yaqin natija.
-> Pastdagi jadvalga qarang: 4x bo'lish ehtimolidan balansning yarmini yo'qotish ehtimoli ancha katta.
-> Faqat yo'qotishga tayyor pulni qo'ying va avval Strategy Tester'da sinang.
+> ⚠️ **Avval o'qing:** EA haftasiga o'rtacha 2–3 ta savdo qiladi. 1 haftada 4x bo'lishi uchun ketma-ket 2 ta TP kerak —
+> bu taxminan **4%** ehtimol. To'xtamay ishlatilsa, strategiyada ustunlik bo'lmasa, taxminan **5 tadan 1** holatda 4x bo'ladi,
+> **4 tadan 3** holatda balansning 90% i ketadi (2-bo'lim). Faqat yo'qotishga tayyor pulni qo'ying va avval Strategy Tester'da sinang.
 
 ## 1. Strategiya qanday ishlaydi
 
@@ -29,21 +29,46 @@ va o'zini to'xtatadi.
   spred katta bo'lsa yoki muhim USD yangiligidan 30 daqiqa oldin/keyin kirilmaydi,
   juma kuni 20:00 da (Toshkent: shanba 01:00) hamma pozitsiya yopiladi.
 
-## 2. Haqiqat: 1 haftada nima bo'lishi mumkin
+## 2. Haqiqat: nima kutish mumkin
 
-Taxminiy hisob (Monte-Karlo, 100 000 hafta): haftada ~10 ta savdo, RR 1:3, spred/komissiya ≈ 0.08R,
-TP ga yetish ehtimoli 25–35% (25% = strategiyada ustunlik yo'q, 35% = juda yaxshi sniper).
+EA qoidalari Python'da aynan takrorlanib, **80 yillik sun'iy oltin narxida** sinaldi
+(ustunliksiz bozor: tasodifiy narx, oltinga o'xshash kunlik tebranish, spred 0.35 $, SL'da 0.30 $ sirpanish):
 
-| Risk (har savdo) | 4x bo'lish | Balansning yarmi va undan ko'pi ketishi | 90%+ ketishi |
+- haftasiga o'rtacha **2.7 ta savdo** (7% haftada 0 ta, 42% da 1–2 ta, 39% da 3–4 ta, 12% da 5+ ta);
+- savdo o'rtacha **12 soat** ochiq turadi, SL o'rtacha 2.3 × ATR(M15), 22% savdo TP ga yetadi;
+- bunday bozorda o'rtacha natija ≈ 0R minus spred — "pul bosib chiqaradigan" sozlama yo'q.
+
+**1 hafta ichida** (har hafta 5000 USC dan boshlansa):
+
+| Risk (har savdo) | 4x bo'ldi | Balansning yarmi va ko'pi ketdi | 90%+ ketdi | O'rtacha (median) hafta oxiri |
+|---|---|---|---|---|
+| 50% | 10% | 53% | 9% | 0.49x |
+| **33% (standart)** | **4%** | **33%** | **0.5%** | **0.67x** |
+| 25% | 2% | 17% | 0% | 0.75x |
+| 20% | 1% | 10% | 0% | 0.81x |
+
+**To'xtamay ishlasa** (4x yoki −90% bo'lguncha):
+
+| Risk | 4x bo'ladi | Odatda qancha vaqtda | −90% bo'ladi |
 |---|---|---|---|
-| 50% | 19–36% | 60–80% | 46–71% |
-| **33% (standart)** | **14–31%** | **49–75%** | **9–24%** |
-| 25% | 10–25% | 26–53% | 1–6% |
-| 20% | 7–20% | 26–53% | 1–6% |
+| 50% | 24% | ~2 hafta | 76% |
+| **33%** | **22%** | **~3 hafta** | **78%** |
+| 25% | 22% | ~4 hafta | 78% |
+| 20% | 21% | ~6 hafta | 79% |
 
-- Haftada 5 ta savdo bo'lsa, 33% riskda 4x ehtimoli 9–18% ga tushadi.
-- "Eng kuchli razgon" = 33%. 50% da 4x ehtimoli ozgina oshadi, lekin hisob deyarli yarmi holatda kuyadi.
-- Agar xavfni kamaytirmoqchi bo'lsangiz — `InpRiskPercent` ni 25 yoki 20 qiling.
+Xulosa: **ustunlik bo'lmasa risk faqat tezlikni o'zgartiradi** — 4x ehtimoli baribir ~22% (5 tadan 1).
+
+**Ustunlik bo'lsa** (Strategy Tester ko'rsatadi, 4-bo'lim) — rasm o'zgaradi va **kichikroq risk yaxshiroq** bo'ladi
+(taxminiy hisob, 4x ga −90% dan oldin yetish ehtimoli):
+
+| TP ga yetgan savdolar (testerdagi Profit Factor) | Risk 33% | Risk 20% | Risk 10% |
+|---|---|---|---|
+| 25% (PF ≈ 1.0 — ustunlik yo'q) | 18% | 16% | 11% |
+| 30% (PF ≈ 1.3) | 31% (~2 hafta) | 37% (~6 hafta) | 52% (~23 hafta) |
+| 35% (PF ≈ 1.6) | 47% (~3 hafta) | 65% (~6 hafta) | 93% (~19 hafta) |
+
+Qoida: testerda **Profit Factor 1 dan kichik** — ishlatmang. **1.3 dan katta** bo'lsa — 4x ehtimolini oshirish uchun
+`InpRiskPercent` ni 20 ga tushiring (sekinroq, lekin ishonchliroq), tezlik muhim bo'lsa — 33.
 
 ## 3. O'rnatish (Windows, MT5)
 
@@ -70,10 +95,18 @@ ni grafikka sudrab olib keling:
 - **OK**.
 
 Yuqoridagi panelda **Algo Trading** (Алго-трейдинг) tugmasi yashil bo'lishi kerak.
-Grafikning chap yuqori burchagida EA paneli chiqadi: boshlanish, hozirgi balans, maqsad, bugungi savdolar va **Holat**.
+Grafikning chap yuqori burchagida EA paneli chiqadi: boshlanish, hozirgi balans, maqsad, bugungi savdolar,
+**Natija** (nechta savdo, nechtasi foyda/zarar, jami) va **Holat**.
 
 **Qayerdan kuzataman:** **Ctrl+T** (Toolbox / Инструменты) → **Trade** (Торговля) — ochiq savdo,
 **History** (История) — yopilganlar, **Experts** (Эксперты) — EA xabarlari.
+
+**Telefondan kuzatish.**
+1. Telefonga **MetaTrader 5** ilovasini o'rnating va Exness hisobingizga kiring — ochiq savdolar va tarix shu yerda ko'rinadi.
+2. Push xabarlar: telefon ilovasida **Settings** (Настройки) → **Messages** (Сообщения) bo'limida **MetaQuotes ID** yozilgan — uni ko'chiring.
+   Kompyuterdagi MT5: **Tools → Options → Notifications** (Сервис → Настройки → Уведомления) →
+   ✅ **Enable Push Notifications** (Разрешить Push-уведомления) → MetaQuotes ID ni yozing → **Test** → **OK**.
+3. Endi EA savdo ochilganda, yopilganda (TP/SL, natija va balans) va maqsad bajarilganda telefonga xabar yuboradi.
 
 ## 4. Avval Strategy Tester'da sinang (majburiy)
 
@@ -98,11 +131,12 @@ Natija **Backtest** (Бэктест) bo'limida:
 | 1.0–1.3 | Kuchsiz ustunlik — 33% riskda kuyish ehtimoli katta |
 | 1.3 dan katta (30+ savdo bilan) | Ustunlik bor — lekin kelajakda ham shunday bo'lishi kafolat emas |
 
-Shuningdek qarang: Total trades (Всего трейдов) — haftasiga nechta savdo,
-Profit trades (Прибыльные трейды) — RR 1:3 da 28–30% dan yuqori bo'lsa yaxshi.
+Shuningdek qarang: Total trades (Всего трейдов) — haftasiga nechta savdo (sun'iy sinovda ~2.7).
+Profit trades (Прибыльные трейды) ustunliksiz bozorda ham ~27–29% bo'ladi (juma yopilishlari tufayli),
+shuning uchun asosiy ko'rsatkich — **Profit Factor**.
 
-**2-test — razgon.** `InpRiskPercent = 33`, `InpGoalX = 4`, sanani **1 hafta** qilib, 8–10 xil haftani alohida sinang.
-Nechtasida 4x bo'ldi, nechtasida balans yarmidan pastga tushdi — shuni sanang.
+**2-test — razgon.** `InpRiskPercent = 33`, `InpGoalX = 4`, sanani 1–2 oy qilib, 6–8 xil boshlanish sanasidan sinang.
+Nechtasida 4x bo'ldi, nechtasida balans 90% kamaydi va bu necha haftada bo'ldi — shuni sanang.
 
 Eslatma: testerda yangiliklar filtri ishlamaydi. Birinchi "real ticks" testi tarixni yuklab olishi uchun biroz vaqt oladi.
 
@@ -134,7 +168,8 @@ SL chegaralari `InpMinStopATR`/`InpMaxStopATR` (0.5–3 × ATR M15).
 | `InpNewsFilter` / `InpNewsMinutes` | true / 30 | Muhim USD yangiligidan 30 daqiqa oldin va keyin kirilmaydi |
 | `InpFridayClose` / `InpFridayHour` | true / 20 | Juma 20:00 da yopish (16:00 dan keyin yangi kirish yo'q) |
 
-**Boshqa** — `InpMagic` (770077) EA savdolari belgisi, `InpSlippageUSD` (0.50 $) ruxsat etilgan sirpanish.
+**Boshqa** — `InpMagic` (770077) EA savdolari belgisi, `InpSlippageUSD` (0.50 $) ruxsat etilgan sirpanish,
+`InpPush` (true) telefonga push xabar.
 
 ## 6. Muhim
 
