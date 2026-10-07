@@ -107,6 +107,52 @@ Ko'proq coin kerak bo'lsa `CORR_MAX=0.85`, kamroq (yanada farqli) kerak bo'lsa `
 (10x da TP 3% = ROI +30%). ROI +3% da yopish kerak bo'lsa: `TP_PCT=0.3` — lekin bunda
 foydaning ~1/3 qismi komissiyaga ketadi.
 
+## 📈 Trend bot — 5m razgon, SL zinapoyasi (`trend_bot.py`)
+Har **15 daqiqada** 5 daqiqalik shamlar bo'yicha eng kuchli trenddagi coinda savdo ochadi va foyda
+har **+1%** ga yetganda SL ni siljitib boradi.
+- **Kirish:** LONG — EMA20 > EMA50, narx EMA20 dan yuqorida, RSI 50–75; SHORT — teskarisi (RSI 25–50).
+  Bir nechta coin mos kelsa — trend kuchi (EMA farqi / ATR) va hajm bo'yicha eng kuchlisi. Mos coin bo'lmasa — navbat o'tkaziladi.
+- **Hajm:** marja balansning **10%** i × **20x** (pozitsiya ≈ balansning 2 baravari), bir vaqtda **3 tagacha**
+- **SL zinapoyasi** (TP yo'q — foyda trend davom etguncha o'sadi):
+
+| Narx foydasi | SL qayerda | 5 000 USDT balansda (pozitsiya 10 000) |
+|---|---|---|
+| 0% (kirish) | −1% | SL bo'lsa ≈ −110 USDT |
+| +1% ga yetdi | zararsiz (+0.12%) | ≈ 0 |
+| +2% ga yetdi | +1% | ≈ +90 USDT |
+| +3% ga yetdi | +2% | ≈ +190 USDT |
+| +5% ga yetdi | +4% | ≈ +390 USDT |
+
+- Bugungi zarar **15%** ga yetsa — ertagacha yangi savdo yo'q. Haqiqiy pulda faqat `TREND_LIVE_OK=1` bilan.
+
+```bash
+python3 backtest.py                  # 1) avval strategiyani Binance tarixida sinang (14 kun)
+python3 backtest.py --days 30 --sweep  #    30 kun + bir nechta sozlamani solishtirish
+caffeinate -i python3 trend_bot.py   # 2) demo'da ishga tushirish
+python3 trend_bot.py --stats         #    statistika
+python3 trend_bot.py --close         #    hamma pozitsiyani yopish
+```
+⚠️ Bot to'xtatilsa, birjadagi SL joyida qoladi, lekin **endi siljimaydi**.
+
+### Backtest nima ko'rsatadi
+`backtest.py` botdagi **aynan o'sha** qoidalarni Binance'ning haqiqiy 5m tarixida o'ynaydi
+(komissiya 0.05%+0.05%, SL da 0.05% sirpanish, sham ichida avval SL tekshiriladi). Sintetik tasodifiy
+bozorlarda bu strategiya o'rtacha **komissiya miqdorida yutqazadi** (median −33…−44%) — ya'ni foyda
+faqat haqiqiy bozorda trendlar davom etsa bo'ladi. Buni faqat haqiqiy tarix ko'rsatadi: avval backtest, keyin demo.
+`--sweep` dagi eng yaxshi qator o'tmishga "moslashgan" bo'lishi mumkin — uni demo'da tasdiqlang.
+
+| Sozlama | Standart | Ma'nosi |
+|---|---|---|
+| `TREND_INTERVAL_MIN` | 15 | Necha daqiqada bir yangi savdo (10–15) |
+| `TREND_MARGIN_PCT` | 10 | Har savdoga balansning necha foizi marja |
+| `TREND_LEVERAGE` | 20 | Leverage |
+| `TREND_SL_PCT` | 1 | Boshlang'ich SL (narx %) |
+| `TREND_STEP_PCT` | 1 | Har necha % foydada SL siljiydi |
+| `TREND_TP_PCT` | 0 | TP (0 = yo'q) |
+| `TREND_MAX_OPEN` | 3 | Bir vaqtda nechta savdo |
+| `TREND_DAILY_LOSS_PCT` | 15 | Kunlik zarar limiti |
+| `TREND_SCAN_COINS` | 20 | Nechta eng likvid coin tekshiriladi |
+
 ## ⚡ Razgon bot (`razgon_bot.py`)
 Har daqiqada 1 ta savdo ochadi va sof foydasi (komissiyalardan keyin) **+0.1%** bo'lishi bilan yopadi.
 - Coin: tanlangan coinlardan eng likvid 15 tasi ichida **1 daqiqalik trendi eng kuchlisi**; yo'nalish — trend bo'yicha

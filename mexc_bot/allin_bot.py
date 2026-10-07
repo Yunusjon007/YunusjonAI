@@ -116,7 +116,7 @@ def stamp(ms):
 
 def fmt_price(x):
     if x is None:
-        return "?"
+        return "—"
     return f"{x:.4f}".rstrip("0").rstrip(".") if x >= 1 else f"{x:.8f}".rstrip("0").rstrip(".")
 
 
@@ -219,14 +219,17 @@ def martingale_on(broker):
 
 
 def classify(p, exit_price):
-    """Pozitsiya qayerda yopilganini aniqlaydi: TP, SL yoki boshqa (qo'lda/likvidatsiya)."""
-    if exit_price is None or p.get("tp") is None or p.get("sl") is None:
+    """Pozitsiya qayerda yopilganini aniqlaydi: TP, SL, TRAIL (siljitilgan SL) yoki boshqa (qo'lda/likvidatsiya)."""
+    if exit_price is None or p.get("sl") is None:
         return "?"
-    tolerance = abs(p["tp"] - p["sl"]) * 0.1
-    if abs(exit_price - p["tp"]) <= tolerance:
-        return "TP"
+    if p.get("tp") is not None:
+        tolerance = abs(p["tp"] - p["sl"]) * 0.1
+        if abs(exit_price - p["tp"]) <= tolerance:
+            return "TP"
+    else:
+        tolerance = p["sl"] * 0.004  # TP yo'q: SL atrofida 0.4%
     if abs(exit_price - p["sl"]) <= tolerance:
-        return "SL"
+        return "TRAIL" if p.get("trail_steps") else "SL"
     return "boshqa"
 
 
@@ -281,13 +284,14 @@ class PaperBroker:
             for symbol, p in list(self.positions.items()):
                 price = self.ex.fetch_ticker(symbol)["last"]
                 p["last"], p["upnl"] = price, pnl_at(p, price)
+                tp, sl = p["tp"], p["sl"]
                 if p["side"] == "long":
-                    hit_tp, hit_sl = price >= p["tp"], price <= p["sl"]
+                    hit_tp, hit_sl = tp is not None and price >= tp, price <= sl
                 else:
-                    hit_tp, hit_sl = price <= p["tp"], price >= p["sl"]
+                    hit_tp, hit_sl = tp is not None and price <= tp, price >= sl
                 if hit_sl or hit_tp:
-                    closed.append(self._settle(symbol, p["sl"] if hit_sl else p["tp"],
-                                               label(p, "SL" if hit_sl else "TP")))
+                    reason = ("TRAIL" if p.get("trail_steps") else "SL") if hit_sl else "TP"
+                    closed.append(self._settle(symbol, sl if hit_sl else tp, label(p, reason)))
         except Exception:
             self.closed_queue = closed + self.closed_queue  # yopilganlar yo'qolmasin
             raise
@@ -380,16 +384,15 @@ class LiveBroker:
 
     def open(self, symbol, side, contracts, qty, price, sl, tp):
         opened_at = now_ms()
-        self.ex.create_order(
-            symbol, "market", "buy" if side == "long" else "sell", contracts,
-            params={
-                "marginMode": "isolated",
-                "leverage": LEVERAGE,
-                # MEXC order/create maydonlari: birja tomonida SL/TP
-                "stopLossPrice": float(self.ex.price_to_precision(symbol, sl)),
-                "takeProfitPrice": float(self.ex.price_to_precision(symbol, tp)),
-            },
-        )
+        params = {
+            "marginMode": "isolated",
+            "leverage": LEVERAGE,
+            # MEXC order/create maydonlari: birja tomonida SL/TP
+            "stopLossPrice": float(self.ex.price_to_precision(symbol, sl)),
+        }
+        if tp is not None:
+            params["takeProfitPrice"] = float(self.ex.price_to_precision(symbol, tp))
+        self.ex.create_order(symbol, "market", "buy" if side == "long" else "sell", contracts, params=params)
         self.positions[symbol] = new_position(symbol, side, contracts, qty, price, sl, tp,
                                               qty * price / LEVERAGE, qty * price * FEE_PCT / 100,
                                               opened_at=opened_at)
@@ -488,8 +491,9 @@ class BinanceBroker(LiveBroker):
         try:
             self.ex.create_order(symbol, "market", exit_side, p["contracts"],
                                  params={"stopLossPrice": sl, "reduceOnly": True})
-            self.ex.create_order(symbol, "market", exit_side, p["contracts"],
-                                 params={"takeProfitPrice": tp, "reduceOnly": True})
+            if tp is not None:
+                self.ex.create_order(symbol, "market", exit_side, p["contracts"],
+                                     params={"takeProfitPrice": tp, "reduceOnly": True})
         except ccxt.BaseError as e:
             # Stop-losssiz pozitsiyani ochiq qoldirmaymiz
             log.error("%s: SL/TP qo'yilmadi (%s) — pozitsiya darhol yopiladi.", short(symbol), e)
@@ -684,8 +688,8 @@ def validate_config():
     if SL_PCT >= liq_distance:
         sys.exit(f"SL_PCT={SL_PCT}% likvidatsiya masofasidan (~{liq_distance:.2f}%) katta yoki teng. "
                  f"SL_PCT ni kamaytiring yoki LEVERAGE ni pasaytiring.")
-    if TP_PCT <= 0 or SL_PCT <= 0:
-        sys.exit("TP_PCT va SL_PCT 0 dan katta bo'lishi kerak.")
+    if TP_PCT < 0 or SL_PCT <= 0:
+        sys.exit("TP_PCT 0 yoki undan katta (0 = TP yo'q), SL_PCT esa 0 dan katta bo'lishi kerak.")
     if EXCHANGE not in ("mexc", "binance"):
         sys.exit("EXCHANGE faqat 'mexc' yoki 'binance' bo'lishi mumkin.")
     if MODE not in ("paper", "demo", "live"):
@@ -803,11 +807,13 @@ def log_settings(balance, mart):
     margin = balance * MARGIN_PCT / 100
     notional = margin * LEVERAGE
     sl_pct = MARTINGALE_SL_PCT if mart else SL_PCT
-    log.info("Sozlamalar: har savdoga balansning %.4g%% i × %dx | TP +%.4g%% | SL -%.4g%% | %s shamlar | "
+    tp_text = f"TP +{TP_PCT:.4g}%" if TP_PCT > 0 else "TP yo'q"
+    log.info("Sozlamalar: har savdoga balansning %.4g%% i × %dx | %s | SL -%.4g%% | %s shamlar | "
              "max %d coin | marja limiti %.4g%% | kunlik zarar limiti %.4g%%",
-             MARGIN_PCT, LEVERAGE, TP_PCT, sl_pct, TIMEFRAME, MAX_POSITIONS, MAX_MARGIN_PCT, DAILY_LOSS_PCT)
-    log.info("Hozirgi balansda bitta savdo: marja ≈ %.2f USDT → pozitsiya %.0f USDT | TP ≈ %+.2f USDT | "
-             "SL ≈ %+.2f USDT (komissiyasiz)", margin, notional, notional * TP_PCT / 100, -notional * sl_pct / 100)
+             MARGIN_PCT, LEVERAGE, tp_text, sl_pct, TIMEFRAME, MAX_POSITIONS, MAX_MARGIN_PCT, DAILY_LOSS_PCT)
+    log.info("Hozirgi balansda bitta savdo: marja ≈ %.2f USDT → pozitsiya %.0f USDT | TP ≈ %s | "
+             "SL ≈ %+.2f USDT (komissiyasiz)", margin, notional,
+             f"{notional * TP_PCT / 100:+.2f} USDT" if TP_PCT > 0 else "—", -notional * sl_pct / 100)
     if mart:
         worst = sum(notional * MARTINGALE_MULT ** k * (MARTINGALE_SL_PCT - k * MARTINGALE_STEP_PCT) / 100
                     for k in range(MARTINGALE_STEPS + 1))
@@ -875,7 +881,7 @@ def open_trade(exchange, broker, symbol, side, balance):
                      short(symbol), notional)
             return False
         sign = 1 if side == "long" else -1
-        tp = price * (1 + sign * TP_PCT / 100)
+        tp = price * (1 + sign * TP_PCT / 100) if TP_PCT > 0 else None
         sl = price * (1 - sign * (MARTINGALE_SL_PCT if martingale_on(broker) else SL_PCT) / 100)
         broker.open(symbol, side, contracts, qty, price, sl, tp)
     except (ccxt.AuthenticationError, ccxt.PermissionDenied):
@@ -939,7 +945,10 @@ def manage_martingale(exchange, broker, balance):
     return closed
 
 
-def run(exchange, broker, journal, pick_coins=choose_coins, sleep=time.sleep, clock=time.time, max_loops=None):
+def run(exchange, broker, journal, pick_coins=choose_coins, scan_fn=None, manage_fn=None,
+        sleep=time.sleep, clock=time.time, max_loops=None):
+    """Asosiy sikl. scan_fn — signal topish (standart: scan), manage_fn — ochiq pozitsiyalarni boshqarish
+    (standart: manage_martingale). Boshqa strategiyalar (razgon_bot, trend_bot) o'zinikini beradi."""
     exchange.load_markets()
     broker.setup()
     log.info("%s | rejim=%s | balans %.2f USDT", EXCHANGE.upper(), MODE, broker.balance())
@@ -970,7 +979,7 @@ def run(exchange, broker, journal, pick_coins=choose_coins, sleep=time.sleep, cl
 
     def step():
         closed = broker.poll()
-        closed += manage_martingale(exchange, broker, broker.balance())
+        closed += (manage_fn or manage_martingale)(exchange, broker, broker.balance())
         for trade in closed:
             # Yopilgan coin kamida bitta to'liq sham davomida qayta ochilmaydi
             state["cooldown"][trade["symbol"]] = clock() + candle_seconds
@@ -1013,7 +1022,7 @@ def run(exchange, broker, journal, pick_coins=choose_coins, sleep=time.sleep, cl
             return None
         candidates = [s for s in coins
                       if s not in broker.positions and state["cooldown"].get(s, 0) <= clock()]
-        signals, report = scan(exchange, candidates)
+        signals, report = (scan_fn or scan)(exchange, candidates)
         state["last_candle"] = head[-2][0]
         if not signals:
             log.info("Skan: %d ta coin | signal yo'q | %s | ochiq %d/%d",
