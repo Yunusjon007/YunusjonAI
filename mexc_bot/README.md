@@ -4,6 +4,15 @@ Har bir savdoga balansning **kichik qismi (standart 1%)** tikiladi, shuning uchu
 balansning katta qismi doim bo'sh qoladi va bot bir vaqtda bir nechta coinda savdo qila oladi.
 Bu moliyaviy maslahat emas. Avval `paper` yoki `demo` rejimda sinab ko'ring.
 
+| Bot | Uslub | Ushlab turish |
+|---|---|---|
+| `allin_bot.py` | 5m EMA kesishishi, martingeyl | soatlar |
+| `trend_bot.py` | 5m trend, har +1% da SL siljiydi | soatlar |
+| `razgon_bot.py` | har daqiqada savdo, +0.1% da yopish | daqiqalar |
+| **`swing_bot.py`** | **4h trend + 1h yorish, piramida, balans maqsadi** | **1–3 kun** |
+
+Bir vaqtda bitta hisobda faqat **bitta** botni ishga tushiring. Har birini avval `backtest.py` bilan sinang.
+
 ## Coinlar qanday tanlanadi (`universe.py`)
 1. Birjadagi barcha USDT perpetual coinlardan 24 soatlik savdo hajmi bo'yicha **eng likvid 50 tasi** olinadi
    (stablecoin, indeks, oltin kabi coin bo'lmagan kontraktlar chiqariladi).
@@ -106,6 +115,58 @@ Ko'proq coin kerak bo'lsa `CORR_MAX=0.85`, kamroq (yanada farqli) kerak bo'lsa `
 `TP_PCT`/`SL_PCT` — **narx** o'zgarishi. Binance'dagi ROI = narx % × leverage
 (10x da TP 3% = ROI +30%). ROI +3% da yopish kerak bo'lsa: `TP_PCT=0.3` — lekin bunda
 foydaning ~1/3 qismi komissiyaga ketadi.
+
+## 🐢 Swing bot — 2–3 kunlik trend + piramida (`swing_bot.py`)
+Bir necha kun davom etadigan trendlarni ushlaydi va trend tasdiqlangan sari pozitsiyani kattalashtiradi.
+- **Yo'nalish (4h):** EMA50 > EMA200 — faqat LONG, EMA50 < EMA200 — faqat SHORT
+- **Kirish (1h):** narx oxirgi **48 soatning** eng yuqori nuqtasini yorsa LONG (eng pastini — SHORT)
+- **SL:** 2.5 × ATR(1h). **Hajm risk bo'yicha:** SL urilsa balansning **2%** i ketadi
+- **Piramida (razgon):** narx har **+1 ATR** yurganda yana xuddi shunday qism qo'shiladi (jami **3** qismgacha),
+  butun pozitsiya SL i oxirgi qo'shimchadan 2.5 ATR orqaga ko'tariladi
+- **Chandelier SL:** eng yaxshi narx − **3 × ATR**, faqat foyda tomonga siljiydi. TP yo'q — trend tugaguncha
+- **Balans maqsadi:** balans (ochiq savdolar bilan) **+10%** ga yetsa — hamma pozitsiya yopiladi, keyingi maqsad yangi balansdan
+- **10x**, bir vaqtda **3** coin, marja limiti **80%**, kunlik zarar limiti **15%**. Haqiqiy pulda faqat `SWING_LIVE_OK=1` bilan.
+  Faqat Binance (demo/live) yoki paper rejimda ishlaydi.
+
+### 5 000 USDT balansda (SL ~3% bo'lgan coin)
+| Holat | Pozitsiya | SL urilsa |
+|---|---|---|
+| Kirish (1 qism) | ≈ 3 300 USDT | ≈ −100 USDT (−2%) |
+| +1 ATR → 2-qism | ≈ 6 700 USDT | SL ko'tarilgan, zarar kamroq |
+| +2 ATR → 3-qism | ≈ 10 000 USDT | SL birinchi kirishdan ≈ 0.6% pastda |
+| Trend +10% ga borib, chandelier +6.4% da yopsa | 10 000 USDT | foyda ≈ +520 USDT (213 + 173 + 133) |
+| Trend +20% ga borsa (SL +16.4% da) | 10 000 USDT | foyda ≈ +1 520 USDT |
+
+```bash
+python3 backtest.py --swing                 # 1) avval 90 kunlik Binance tarixida sinang
+python3 backtest.py --swing --sweep         #    SL / chandelier / qismlar sonini solishtirish
+python3 backtest.py --swing --target 0      #    balans maqsadisiz (trendni oxirigacha ushlab)
+caffeinate -i python3 swing_bot.py          # 2) demo'da ishga tushirish
+python3 swing_bot.py --stats                #    statistika
+python3 swing_bot.py --close                #    hamma pozitsiyani yopish
+```
+⚠️ Bot to'xtatilsa, birjadagi SL joyida qoladi, lekin **siljimaydi va qism qo'shilmaydi**. Balans maqsadi bot qayta
+ishga tushganda o'sha paytdagi balansdan qayta hisoblanadi.
+
+Tasodifiy (sintetik) bozorlarda backtest xarajatsiz ≈ 0 natija beradi (40 bozorda +0.06% ± 0.05% hajmdan) —
+ya'ni mexanikada yashirin foyda yo'q. Haqiqiy tarixda foyda chiqsa — u haqiqiy trendlardan. Shu bilan birga
+trend strategiyalarida natija bir necha katta yutuqqa bog'liq: bitta yaxshi backtest omad bo'lishi mumkin —
+uzunroq davr (`--days 180`) va demo bilan tasdiqlang.
+
+| Sozlama | Standart | Ma'nosi |
+|---|---|---|
+| `SWING_RISK_PCT` | 2 | Har qism SL urilsa balansning necha foizi |
+| `SWING_STOP_ATR` | 2.5 | Boshlang'ich SL = shuncha × ATR |
+| `SWING_TRAIL_ATR` | 3 | Chandelier: eng yaxshi narx − shuncha × ATR |
+| `SWING_ADD_ATR` | 1 | Har necha ATR da yangi qism |
+| `SWING_MAX_UNITS` | 3 | Jami qismlar (1 = piramidasiz) |
+| `SWING_BREAKOUT_BARS` | 48 | Yorish uchun necha soat |
+| `SWING_LEVERAGE` | 10 | Leverage |
+| `SWING_MAX_OPEN` | 3 | Bir vaqtda nechta coin |
+| `SWING_MAX_MARGIN_PCT` | 80 | Barcha marja limiti (balansdan %) |
+| `SWING_TARGET_PCT` | 10 | Balans maqsadi (0 = o'chiq) |
+| `SWING_DAILY_LOSS_PCT` | 15 | Kunlik zarar limiti |
+| `SWING_SCAN_COINS` | 20 | Nechta eng likvid coin tekshiriladi |
 
 ## 📈 Trend bot — 5m razgon, SL zinapoyasi (`trend_bot.py`)
 Har **15 daqiqada** 5 daqiqalik shamlar bo'yicha eng kuchli trenddagi coinda savdo ochadi va foyda

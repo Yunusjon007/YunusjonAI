@@ -98,6 +98,7 @@ PAPER_BALANCE = env("PAPER_BALANCE", 5000.0, float)
 
 MAINTENANCE_MARGIN_PCT = 0.4  # taxminiy; likvidatsiya masofasini hisoblash uchun
 LEGACY_KEYS = ("MARGIN_SHARE", "TARGET_X", "MAX_LOSSES_IN_ROW", "SYMBOL")
+SETTINGS_LOGGER = None  # boshqa strategiya o'z sozlamalar qatorini berishi mumkin: f(balance)
 JOURNAL_PATH = HERE / f"trades_{EXCHANGE}_{MODE}.csv"
 LOG_PATH = HERE / f"bot_{EXCHANGE}_{MODE}.log"
 
@@ -206,8 +207,9 @@ def martingale_tp(p):
 
 
 def label(p, reason):
-    """Jurnal uchun sabab: martingeyl qilingan bo'lsa qadamlar soni qo'shiladi (masalan 'TP M2')."""
-    return f"{reason} M{p['adds']}" if p.get("adds") else reason
+    """Jurnal uchun sabab: pozitsiyaga qo'shimcha qilingan bo'lsa soni qo'shiladi
+    (martingeyl 'TP M2', piramida 'TRAIL P2' — belgi p['add_tag'] da)."""
+    return f"{reason} {p.get('add_tag', 'M')}{p['adds']}" if p.get("adds") else reason
 
 
 def used_margin(broker):
@@ -805,6 +807,8 @@ def print_coins(exchange):
 
 
 def log_settings(balance, mart):
+    if SETTINGS_LOGGER:  # boshqa strategiya (masalan swing_bot) o'z sozlamalarini o'zi yozadi
+        return SETTINGS_LOGGER(balance)
     margin = balance * MARGIN_PCT / 100
     notional = margin * LEVERAGE
     sl_pct = MARTINGALE_SL_PCT if mart else SL_PCT
@@ -856,11 +860,24 @@ def scan(exchange, symbols):
     return signals, report
 
 
-def open_trade(exchange, broker, symbol, side, balance):
-    """Signal bo'yicha savdo ochadi: marja = balansning MARGIN_PCT foizi. Ochilsa True."""
+def open_trade(exchange, broker, symbol, side, balance, stop_pct=None, risk_pct=None, meta=None):
+    """Signal bo'yicha savdo ochadi. Ochilsa True.
+    Oddiy holat: marja = balansning MARGIN_PCT foizi, SL = SL_PCT.
+    stop_pct va risk_pct berilsa (swing_bot): SL = stop_pct, hajm shunday tanlanadiki SL urilsa
+    balansning risk_pct foizi yo'qotiladi. meta — pozitsiyaga qo'shiladigan qo'shimcha ma'lumot (masalan ATR)."""
     try:
         price = exchange.fetch_ticker(symbol)["last"]
-        notional = balance * MARGIN_PCT / 100 * LEVERAGE
+        if stop_pct and risk_pct:
+            liq = 100 / LEVERAGE - MAINTENANCE_MARGIN_PCT
+            if stop_pct >= liq:
+                log.info("%s: SL (%.2f%%) likvidatsiyadan (%.2f%%) uzoq — o'tkazib yuborildi.", short(symbol),
+                         stop_pct, liq)
+                return False
+            notional = balance * risk_pct / stop_pct
+            sl_pct = stop_pct
+        else:
+            notional = balance * MARGIN_PCT / 100 * LEVERAGE
+            sl_pct = MARTINGALE_SL_PCT if martingale_on(broker) else SL_PCT
         cap = broker.max_notional(symbol)
         if cap is not None and notional > cap * 0.98:
             if cap <= 0:
@@ -881,9 +898,12 @@ def open_trade(exchange, broker, symbol, side, balance):
             log.info("%s: savdo hajmi (%.2f USDT) birja minimumidan kichik — o'tkazib yuborildi.",
                      short(symbol), notional)
             return False
+        if used_margin(broker) + qty * price / LEVERAGE > balance * MAX_MARGIN_PCT / 100:
+            log.info("%s: marja limiti (%.4g%%) — o'tkazib yuborildi.", short(symbol), MAX_MARGIN_PCT)
+            return False
         sign = 1 if side == "long" else -1
         tp = price * (1 + sign * TP_PCT / 100) if TP_PCT > 0 else None
-        sl = price * (1 - sign * (MARTINGALE_SL_PCT if martingale_on(broker) else SL_PCT) / 100)
+        sl = price * (1 - sign * sl_pct / 100)
         broker.open(symbol, side, contracts, qty, price, sl, tp)
     except (ccxt.AuthenticationError, ccxt.PermissionDenied):
         raise  # kalit xato — davom etib bo'lmaydi
@@ -891,6 +911,8 @@ def open_trade(exchange, broker, symbol, side, balance):
         log.error("%s: savdo ochilmadi: %s", short(symbol), e)
         return False
     p = broker.positions[symbol]
+    if meta:
+        p.update(meta)
     log.info("🟢 %s %s ochildi @ %s | marja %.2f USDT × %dx = %.0f USDT | TP %s | SL %s | ochiq %d/%d",
              short(symbol), side.upper(), fmt_price(p["entry"]), p["margin"], LEVERAGE, p["qty"] * p["entry"],
              fmt_price(tp), fmt_price(sl), len(broker.positions), MAX_POSITIONS)
@@ -1030,8 +1052,10 @@ def run(exchange, broker, journal, pick_coins=choose_coins, scan_fn=None, manage
                      len(candidates), report, len(broker.positions), MAX_POSITIONS)
             return None
 
-        log.info("Skan: signallar — %s", ", ".join(f"{short(s)} {d.upper()}" for s, d in signals))
-        for symbol, side in signals:
+        log.info("Skan: signallar — %s", ", ".join(f"{short(sig[0])} {sig[1].upper()}" for sig in signals))
+        for sig in signals:
+            symbol, side = sig[0], sig[1]
+            extra = sig[2] if len(sig) > 2 else {}  # strategiya qo'shimcha parametr berishi mumkin
             if len(broker.positions) >= MAX_POSITIONS:
                 log.info("Bo'sh joy qolmadi (%d/%d) — qolgan signallar o'tkazib yuborildi.",
                          MAX_POSITIONS, MAX_POSITIONS)
@@ -1039,7 +1063,7 @@ def run(exchange, broker, journal, pick_coins=choose_coins, scan_fn=None, manage
             if used_margin(broker) + base_margin > cap:
                 log.info("Marja limiti (%.4g%%) — qolgan signallar o'tkazib yuborildi.", MAX_MARGIN_PCT)
                 break
-            open_trade(exchange, broker, symbol, side, balance)
+            open_trade(exchange, broker, symbol, side, balance, **extra)
         return None
 
     loops = 0
