@@ -437,14 +437,15 @@ class BinanceBroker(LiveBroker):
         return self.caps[symbol]
 
     def _prepare(self, symbol):
-        if symbol in self.prepared:
-            return
-        try:
-            self.ex.set_margin_mode("isolated", symbol)
-        except ccxt.MarginModeAlreadySet:
-            pass  # allaqachon isolated
+        """Isolated margin (bir marta) va leverage — har yangi savdodan oldin, Binance ilovasida qo'lda
+        o'zgartirilgan bo'lsa ham bot sozlamasi (LEVERAGE) qaytariladi: pozitsiya hajmi shunga qarab hisoblanadi."""
+        if symbol not in self.prepared:
+            try:
+                self.ex.set_margin_mode("isolated", symbol)
+            except ccxt.MarginModeAlreadySet:
+                pass  # allaqachon isolated
+            self.prepared.add(symbol)
         self.ex.set_leverage(LEVERAGE, symbol)
-        self.prepared.add(symbol)
 
     def _cancel_triggers(self, symbol):
         try:
