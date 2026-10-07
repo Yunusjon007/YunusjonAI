@@ -107,6 +107,44 @@ Ko'proq coin kerak bo'lsa `CORR_MAX=0.85`, kamroq (yanada farqli) kerak bo'lsa `
 (10x da TP 3% = ROI +30%). ROI +3% da yopish kerak bo'lsa: `TP_PCT=0.3` — lekin bunda
 foydaning ~1/3 qismi komissiyaga ketadi.
 
+## ⚡ Razgon bot (`razgon_bot.py`)
+Har daqiqada 1 ta savdo ochadi va sof foydasi (komissiyalardan keyin) **+0.1%** bo'lishi bilan yopadi.
+- Coin: tanlangan coinlardan eng likvid 15 tasi ichida **1 daqiqalik trendi eng kuchlisi**; yo'nalish — trend bo'yicha
+  (RSI > 75 da LONG, RSI < 25 da SHORT ochilmaydi)
+- Marja balansning **5%** i × **20x** → pozitsiya ≈ balansning 100%
+- TP: narx **+0.2%** (sof +0.1%), SL: narx **−2%**
+- Bir vaqtda **5 tagacha** savdo; bugungi zarar **20%** ga yetsa — ertagacha to'xtaydi
+- Savdolar alohida faylga yoziladi: `trades_razgon_binance_demo.csv`
+
+```bash
+caffeinate -i python3 razgon_bot.py   # ishga tushirish
+python3 razgon_bot.py --stats         # razgon statistikasi
+python3 razgon_bot.py --close         # hamma ochiq pozitsiyani yopish
+```
+**Asosiy bot bilan bir vaqtda, bitta hisobda ishga tushirmang** — ular bir-birining pozitsiyalarini ko'radi.
+Haqiqiy pulda (`MODE=live`) faqat `.env` da `RAZGON_LIVE_OK=1` bo'lsa ishlaydi.
+
+### ⚠️ Hisob (narx tasodifiy harakat qilsa)
+| | |
+|---|---|
+| Yutuqli savdolar | ~91% |
+| Bitta yutuq / bitta zarar | +0.1% / −2.1% balans |
+| O'rtacha natija | **−0.1% balans har savdoda** (komissiya) |
+| 1 kun (~400 savdo), median | **−34%** |
+| 7 kun, median | **−95%** |
+
+Savdo qancha ko'p bo'lsa, komissiya shuncha ko'p yeydi. Demo'da natijani `--stats` dagi **Sof natija** bilan kuzating.
+
+| Sozlama | Standart | Ma'nosi |
+|---|---|---|
+| `RAZGON_MARGIN_PCT` | 5 | Har savdoga balansning necha foizi marja |
+| `RAZGON_LEVERAGE` | 20 | Leverage |
+| `RAZGON_PROFIT_PCT` | 0.1 | Sof foyda (pozitsiyadan %) — shunda yopiladi |
+| `RAZGON_SL_PCT` | 2 | SL (narx %) |
+| `RAZGON_MAX_OPEN` | 5 | Bir vaqtda nechta savdo |
+| `RAZGON_DAILY_LOSS_PCT` | 20 | Kunlik zarar limiti (balansdan %) |
+| `RAZGON_SCAN_COINS` | 15 | Har daqiqada nechta coin tekshiriladi |
+
 ## Rejimlar
 | `MODE` | Nima | Kalit |
 |---|---|---|
