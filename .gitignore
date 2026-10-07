@@ -1,0 +1,10 @@
+.env
+.env.backup
+*.session
+__pycache__/
+mexc_bot/trades_*.csv
+mexc_bot/backtest_*.csv
+mexc_bot/bot_*.log*
+mexc_bot/razgon_*.log*
+mexc_bot/trend_*.log*
+mexc_bot/swing_*.log*
