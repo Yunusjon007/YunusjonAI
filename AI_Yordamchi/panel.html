@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="uz"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI Yordamchi</title><link rel="stylesheet" href="panel.css"></head>
+<body>
+<header><div class="brand"><span class="mark">A</span><div><strong>AI Yordamchi</strong><small>Direct · Messenger · Telegram</small></div></div><span class="version">Chrome uchun · 1.0.3</span></header>
+<main>
+<section class="hero"><div><span class="eyebrow">SIZNING BRAUZERINGIZDA</span><h1>Xabarlar uchun<br>yordamchingiz.</h1><p>Akkauntlaringizga kiring, javob berish qoidalarini yozing va kuzatishni boshlang.</p></div><div class="control"><div class="status-line"><span id="dot" class="dot"></span><strong id="activity" role="status">Tayyor</strong></div><div class="actions"><button id="start" class="primary">▶ Boshlash</button><button id="stop" class="secondary" disabled>■ To‘xtatish</button></div><p class="hint">Ishlash vaqtida ushbu oynani ochiq qoldiring. AI uchun ishchi sahifalar avtomatik ochiladi.</p></div></section>
+<div id="notice" role="alert" hidden></div>
+<div class="layout"><div class="left">
+<section class="card"><div class="section-title"><span class="number">1</span><h2>Akkauntlar</h2><span class="pill">API kalitisiz</span></div><p class="muted">Shu Chrome profilidagi loginlaringiz ishlatiladi.</p><div id="accounts"></div></section>
+<section class="card"><div class="section-title"><span class="number">2</span><h2>Javob berish qoidalari</h2></div><label for="rules">Biznesingiz, xizmatlar, narxlar va javob uslubi</label><textarea id="rules" rows="8" maxlength="12000" placeholder="Masalan: O‘zbekcha yoki ruscha javob ber. Ish vaqtimiz…"></textarea><label for="mode">Ishlash rejimi</label><select id="mode"><option value="review">Avval javobni ko‘rsatish</option><option value="auto">Yangi xabarlarga avtomatik yuborish</option></select><p class="hint">Birinchi sinov uchun «Avval javobni ko‘rsatish» tanlangan. Noaniq xabar tanilmasa yuborish to‘xtaydi.</p><button id="save" class="secondary wide">Sozlamalarni saqlash</button></section>
+<section class="card soft"><h2>Oddiy boshlash</h2><ol><li>Kerakli tarmoqlar va AI saytlarida login qiling.</li><li>Bitta shaxsiy chatni oching, so‘ng bu oynaga qayting.</li><li>«Ochiq chatlarni tekshirish» bilan xabarni ko‘ring.</li><li>«Boshlash»ni bosing. Yangi xabar kelishini kuting.</li></ol><p class="hint">Matnli suhbatlar uchun. Rasm/ovoz, Requests va yashirin/arxivdagi barcha chatlarni to‘liq qamrash kafolatlanmaydi. Obuna limitlari saqlanadi.</p></section>
+</div><div class="right">
+<section class="card"><div class="section-title spread"><div><span class="eyebrow">BIRINCHI TEKSHIRUV</span><h2>Ochiq chatlar</h2></div><button id="inspect" class="secondary">Ochiq chatlarni tekshirish</button></div><p class="muted">Faqat o‘qiydi. Xabar yubormaydi. O‘qilgan chatlar keyin kuzatiladi.</p><div id="previews" class="empty">Chatni oching va tekshirish tugmasini bosing.</div></section>
+<section class="card"><div class="section-title spread"><h2>Javoblar navbati <span id="count" class="count">0</span></h2><span class="muted">Shu kompyuterda saqlanadi</span></div><div id="queue" class="empty">Yangi xabar kelganda javob shu yerda paydo bo‘ladi.</div></section>
+<details class="card" open><summary>Faoliyat tarixi</summary><button id="export" class="secondary">Diagnostika hisobotini yuklash</button><div id="logs"></div></details>
+</div></div>
+<footer>AI javob tayyorlash uchun suhbatning oxirgi ko‘rinadigan xabarlari tanlangan AI saytiga yuboriladi. Parol va sessiya kalitlari olinmaydi. <a href="help.html" target="_blank">Yo‘riqnoma va imkoniyatlar</a></footer>
+</main><script src="shared.js"></script><script type="module" src="panel.js"></script></body></html>
