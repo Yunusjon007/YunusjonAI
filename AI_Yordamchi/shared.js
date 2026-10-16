@@ -1,6 +1,9 @@
 (() => {
-  if (globalThis.AIY) return;
+  if (globalThis.AIY?.version === 2) return;
   const norm = value => String(value ?? '').replace(/\u00a0/g,' ').replace(/[ \t]+/g,' ').trim();
+  // Rich editors render each line as its own paragraph, so line breaks never
+  // round-trip exactly. Compare typed and rendered text word by word instead.
+  const flat = value => norm(value).replace(/\s+/g,' ').trim();
   function platform(url) {
     try {
       const h=new URL(url).hostname;
@@ -15,7 +18,8 @@
       const regex=p==='instagram'? /^\/direct\/t\/([^/]+)/:
         p==='facebook'? /\/(?:messages\/)?t\/([^/]+)/:null;
       if(regex) { const m=u.pathname.match(regex); return m ? `${p}:${m[1]}` : ''; }
-      if(p==='telegram' && /^\/(a|k)\//.test(u.pathname) && u.hash.length>1)
+      // Negative peer ids are groups and channels; only private chats are answered.
+      if(p==='telegram' && /^\/(a|k)\//.test(u.pathname) && u.hash.length>1 && !u.hash.startsWith('#-'))
         return `telegram:${u.pathname}:${u.hash}`;
     } catch {}
     return '';
@@ -41,5 +45,5 @@
   const defaults={mode:'review',platforms:['instagram','facebook','telegram'],
     providers:['chatgpt','claude','gemini'],interval:30,maxThreads:20,
     rules:'Mijoz yozgan tilda qisqa, muloyim javob bering. Faqat tasdiqlangan ma’lumotlardan foydalaning. Narx, manzil yoki xizmat noma’lum bo‘lsa aniqlashtiring. O‘zingizni avtomatik yordamchi deb tanishtirishni yashirmang.\n\nBiznes ma’lumotlari: [shu yerga yozing]'};
-  globalThis.AIY={norm,platform,thread,digest,geometryDirection,sources,defaults};
+  globalThis.AIY={version:2,norm,flat,platform,thread,digest,geometryDirection,sources,defaults};
 })();

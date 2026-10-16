@@ -138,3 +138,28 @@ test('all providers unavailable preserves job for later',async()=>{
   assert.equal(j.status,'pending');assert.ok(j.retryAt>Date.now());
 });
 test('cancelled send is a terminal event',()=>assert.ok(terminalStates.has('cancelled')));
+test('Telegram groups and channels are not treated as private chats',()=>{
+  assert.equal(A.thread('https://web.telegram.org/a/#-1001234567'),'');
+  assert.equal(A.thread('https://web.telegram.org/k/#-123'),'');
+  assert.equal(A.thread('https://web.telegram.org/k/#123'),'telegram:/k/:#123');
+});
+test('changed rows with the same latest message still get a reply',async()=>{
+  const {c,j}=controller();c.settings.mode='review';j.status='pending';c.running=true;c.runToken=2;c.delay=async()=>{};
+  c.rpc=async()=>({...snap(),signature:'receipt-shown'});
+  c.generate=async()=>({text:'Reply',provider:'chatgpt'});
+  await c.process(2);assert.equal(j.status,'ready');assert.equal(j.signature,'receipt-shown');
+});
+test('a queued message is answered before the next network is scanned',async()=>{
+  const {c,j}=controller();c.settings.mode='review';j.status='pending';c.running=true;c.runToken=3;c.delay=async()=>{};
+  c.settings.platforms=['instagram','telegram'];chrome.tabs.query=async()=>[];
+  const order=[];c.worker=async platform=>{order.push('worker:'+platform);return 7;};
+  c.rpc=async(id,type)=>type==='discover'?{threads:[]}:snap();
+  c.generate=async()=>{order.push('generate');return {text:'Hi',provider:'chatgpt'};};
+  await c.scan(3,false);
+  assert.ok(order.includes('generate'));assert.ok(order.indexOf('generate')<order.indexOf('worker:telegram'));
+});
+test('page failures before generation retry soon instead of looping',async()=>{
+  const {c,j}=controller();j.status='pending';c.running=true;c.runToken=4;
+  let calls=0;c.worker=async()=>{calls++;throw Error('Sahifa yuklanmadi.');};
+  await c.drain(4);assert.equal(calls,1);assert.equal(j.status,'pending');assert.ok(j.retryAt>Date.now());
+});

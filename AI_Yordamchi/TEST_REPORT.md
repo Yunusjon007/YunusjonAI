@@ -1,10 +1,20 @@
 # Validation — 2026-10-16
 
-42 automated checks passed using Node and local Chromium on synthetic fixtures:
+53 automated checks passed using Node and local Chromium on synthetic fixtures:
 
-- 23 engine checks: baselines, duplicate prevention, stale replies, saved send state, uncertain outcomes, cancellation, provider fallback and review mode.
-- 15 DOM checks: incoming/outgoing messages, editor scope, drafts, changed conversations, media and AI response completion.
-- 4 dashboard checks: settings, narrow viewport, safe rendering of customer text and protection against simultaneous controllers.
+- 27 engine checks: baselines, duplicate prevention, stale replies, saved send state, uncertain outcomes, cancellation, provider fallback, review mode, Telegram group filtering, answering queued messages before the next network is scanned and retry timing.
+- 19 DOM checks: incoming/outgoing messages, editor scope, drafts, changed conversations, media, AI response completion, multi-line prompts and replies in paragraph-based editors, Enter fallback and read receipts.
+- 5 dashboard checks: settings, narrow viewport, safe rendering of customer text, protection against simultaneous controllers and background-safe timers.
+- 2 end-to-end checks: the unpacked extension runs in Chromium against look-alike Instagram, Telegram and ChatGPT pages served locally, and answers a new message automatically.
+
+## Fixes in 1.0.1
+
+- Replies were never produced: every AI prompt spans several lines, and ChatGPT, Claude and Gemini store each line as a separate paragraph, so the exact text check after typing failed and every provider was put on a 15-minute cooldown. Typed text is now compared word by word, the send button is awaited, and submission is confirmed.
+- Multi-line replies sent to a chat were reported as uncertain and blocked the conversation. Sent messages are now confirmed without depending on line breaks.
+- A read receipt or an older message loading between queueing and sending made the job stale for good. Only a different latest message now invalidates a reply.
+- Queued messages waited until every network had been scanned. They are now answered right after the network where they were found.
+- Waits stalled while the dashboard tab was in the background, because Chrome throttles hidden-tab timers. Waits now run on a worker timer.
+- Telegram ignored chat switches made through the address, so its chats could not be read. Chats are now opened from the chat list, with a reload as fallback. Groups and channels are skipped.
 
 These tests do not establish compatibility with current live Instagram, Facebook, Telegram, ChatGPT, Claude or Gemini accounts. No live account messages were sent. Installation in a real Chrome profile and real provider flows require user validation. Start in review mode and check the incoming/outgoing preview before enabling automatic replies.
 
@@ -12,7 +22,7 @@ The extension has no API key or extra API billing. Existing website subscription
 
 ## Optional developer tests
 
-Regular installation requires no developer tools. To rerun checks, use Node 22+, enter the tests folder and run:
+Regular installation requires no developer tools. To rerun checks, use Node 22+ and OpenSSL (for the end-to-end checks), enter the tests folder and run:
 
 ```sh
 npm install

@@ -56,3 +56,9 @@ test('second dashboard cannot mutate shared state',async()=>{
   assert.equal(await second.p.locator('#start').isEnabled(),false);
   assert.equal(await second.p.evaluate(()=>window.writes.length),0);await context.close();
 });
+test('engine waits use a worker timer that background tabs do not throttle',async()=>{
+  const {p,errors}=await panel();const loaded=[];p.on('request',r=>loaded.push(new URL(r.url()).pathname));
+  const ms=await p.evaluate(async()=>{const {Controller}=await import('./engine.js');const t=performance.now();
+    await new Controller().delay(50);return performance.now()-t;});
+  assert.ok(loaded.includes('/timer.js'));assert.ok(ms>=45&&ms<1000);assert.deepEqual(errors,[]);await p.close();
+});

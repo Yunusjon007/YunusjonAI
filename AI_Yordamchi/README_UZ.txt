@@ -7,6 +7,12 @@ O‘RNATISH (bir marta):
 4. Load unpacked / Загрузить распакованное расширение ni bosing.
 5. Ichida manifest.json bor AI_Yordamchi papkasini tanlang.
 
+YANGI VERSIYAGA O‘TISH (1.0.1):
+1. Eski AI_Yordamchi papkasidagi fayllarni yangi ZIP ichidagilar bilan almashtiring.
+2. chrome://extensions sahifasida AI Yordamchi kartasidagi ↻ (Reload / Обновить) tugmasini bosing.
+3. Ochiq Instagram, Facebook va Telegram tablarini bir marta yangilang (F5).
+4. Boshqaruv oynasini qayta oching va «Boshlash»ni bosing.
+
 ESKI PYTHON BOTINI TO‘XTATING. Yangi versiya uchun Terminal kerak emas.
 
 Kengaytma oynasida:
@@ -16,6 +22,9 @@ Kengaytma oynasida:
 - Boshlash: kuzatishni boshlaydi.
 - To‘xtatish: keyingi ishlarni to‘xtatadi.
 - Yuborish: ko‘rib chiqilgan tayyor javobni jo‘natadi.
+
+Telegram’da faqat shaxsiy chatlarga javob beriladi; guruh va kanallar o‘tkaziladi.
+Boshqaruv oynasi orqa fonda (boshqa tab ochiq) bo‘lsa ham ishlayveradi, lekin uni yopmang.
 
 Avval javobni ko‘rsatish rejimida sinang. Keyin avtomatik rejimni tanlash mumkin.
 Boshqaruv oynasi va Chrome ochiq, kompyuter yoqilgan bo‘lishi kerak.

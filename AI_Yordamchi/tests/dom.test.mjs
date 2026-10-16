@@ -113,3 +113,48 @@ test('Claude and Gemini have separate visible answer selectors',async()=>{
     ['https://gemini.google.com/app','<rich-textarea><div contenteditable="true"></div></rich-textarea><model-response><div class="markdown">Gemini reply</div><button aria-label="Copy">Copy</button></model-response>']
   ]){const p=await pageWith(body,url);const r=await call(p,'aiState');assert.equal(r.data.ready,true);assert.equal(r.data.complete,true);assert.match(r.data.text,/reply/);await p.close();}
 });
+test('multi-line prompt is accepted by paragraph-based AI editors',async()=>{
+  // ChatGPT, Claude and Gemini render each prompt line as its own paragraph.
+  const p=await pageWith('<div id="prompt-textarea" contenteditable="true"><p><br></p></div><button data-testid="send-button">Send</button>','https://chatgpt.com/');
+  await p.evaluate(()=>document.querySelector('[data-testid=send-button]').onclick=()=>{
+    document.getElementById('prompt-textarea').innerHTML='<p><br></p>';
+    const stop=document.createElement('button');stop.dataset.testid='stop-button';document.body.append(stop);
+  });
+  const r=await call(p,'aiSubmit',{text:'Rules line.\n\nBIZNES:\n[\n  {\n    "speaker": "incoming"\n  }\n]'});
+  assert.equal(r.ok,true,r.error);assert.equal(r.data.submitted,true);await p.close();
+});
+test('multi-line reply is confirmed as sent from a paragraph-based composer',async()=>{
+  const p=await pageWith(fixture().replace('contenteditable="true"></div>','contenteditable="true"><p><br></p></div>'));
+  const {data:s}=await call(p,'snapshot');
+  await p.evaluate(()=>document.getElementById('send').onclick=()=>{
+    const ed=document.querySelector('[role=textbox]'),row=document.createElement('div');
+    row.setAttribute('role','row');row.dataset.messageId='m3';row.dataset.direction='outgoing';
+    const b=document.createElement('div');b.dir='auto';b.className='out';b.innerText=ed.innerText.replace(/\n+/g,'\n');row.append(b);
+    document.getElementById('messages').append(row);ed.innerHTML='<p><br></p>';
+  });
+  const r=await call(p,'socialSend',{signature:s.signature,event:s.event,key:s.key,text:'Assalomu alaykum!\n\nQanday yordam bera olaman?',jobId:'j'});
+  assert.equal(r.data.status,'sent');await p.close();
+});
+test('Enter sends when no send button is recognizable',async()=>{
+  const p=await pageWith(fixture().replace('<button type="button" aria-label="Send" id="send">Send</button>',''));
+  const {data:s}=await call(p,'snapshot');
+  await p.evaluate(()=>{const ed=document.querySelector('[role=textbox]');ed.addEventListener('keydown',e=>{
+    if(e.key!=='Enter')return;const row=document.createElement('div');
+    row.setAttribute('role','row');row.dataset.messageId='m3';row.dataset.direction='outgoing';
+    row.innerHTML='<div dir="auto" class="out"></div>';row.firstChild.textContent=ed.innerText;
+    document.getElementById('messages').append(row);ed.textContent='';
+  });});
+  const r=await call(p,'socialSend',{signature:s.signature,event:s.event,key:s.key,text:'Hello!',jobId:'j'});
+  assert.equal(r.data.status,'sent');await p.close();
+});
+test('read receipt changing the rows does not block the reply',async()=>{
+  const p=await pageWith(fixture());const {data:s}=await call(p,'snapshot');
+  await p.evaluate(()=>{const row=document.createElement('div');row.setAttribute('role','row');
+    row.innerHTML='<div dir="auto" style="margin-left:300px;width:60px">Seen</div>';document.getElementById('messages').prepend(row);
+    document.getElementById('send').onclick=()=>{const ed=document.querySelector('[role=textbox]'),r=document.createElement('div');
+      r.setAttribute('role','row');r.dataset.messageId='m3';r.dataset.direction='outgoing';r.innerHTML='<div dir="auto" class="out"></div>';
+      r.firstChild.textContent=ed.innerText;document.getElementById('messages').append(r);ed.textContent='';};});
+  const {data:now}=await call(p,'snapshot');assert.notEqual(now.signature,s.signature);assert.equal(now.event,s.event);
+  const r=await call(p,'socialSend',{signature:s.signature,event:s.event,key:s.key,text:'Hello!',jobId:'j'});
+  assert.equal(r.data.status,'sent');await p.close();
+});

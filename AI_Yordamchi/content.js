@@ -1,6 +1,7 @@
 (() => {
-  if(globalThis.__AIY_CONTENT__) return;
-  globalThis.__AIY_CONTENT__=true;
+  // Versioned so an updated extension replaces a copy left behind by the old one.
+  if(globalThis.__AIY_CONTENT__===2) return;
+  globalThis.__AIY_CONTENT__=2;
   const A=globalThis.AIY;
   const cancelled=new Set();
   const all=(sel,root=document)=>Array.from(root.querySelectorAll(sel));
@@ -97,6 +98,14 @@
   async function snapshot() {
     const p=A.platform(location.href), key=A.thread(location.href);
     if(!key) throw Error('Shaxsiy chat ochilmagan. Direct / Messenger / Telegram chatini oching.');
+    if(p==='telegram') {
+      // Telegram swaps chats in place; never read the previous chat under the new address.
+      const peer=decodeURIComponent(location.hash.slice(1));
+      const shown=all('#MiddleColumn .MiddleHeader [data-peer-id], #column-center .chat-info [data-peer-id]')
+        .filter(visible).map(e=>e.getAttribute('data-peer-id'));
+      if(/^\d+$/.test(peer) && shown.length && !shown.includes(peer))
+        throw Error('Chat hali yuklanmagan. Keyingi tekshiruvda qayta ko‘riladi.');
+    }
     const ed=editor(p); if(!ed) throw Error('Xabar yozish katagi topilmadi. Loginni va chatni tekshiring.');
     const root=scopeFor(p,ed); if(!root) throw Error('Bu sahifadagi suhbat paneli tanilmadi. Avtomatik yuborish to‘xtatildi.');
     const raw=rowsFor(root,p);
@@ -140,20 +149,48 @@
     return {platform:p,threads:[...found.values()]};
   }
   function editorValue(ed) {return A.norm('value' in ed?ed.value:ed.innerText);}
-  function fill(ed,value) {
+  const pause=ms=>new Promise(r=>setTimeout(r,ms));
+  function selectAll(ed) {
+    ed.focus();
+    const sel=getSelection(),range=document.createRange();range.selectNodeContents(ed);
+    sel.removeAllRanges();sel.addRange(range);
+  }
+  async function fill(ed,value) {
     ed.focus();
     if(ed instanceof HTMLTextAreaElement || ed instanceof HTMLInputElement) {
       const proto=ed instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
       Object.getOwnPropertyDescriptor(proto,'value').set.call(ed,value);
       ed.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));
     } else {
-      const sel=getSelection(),range=document.createRange();range.selectNodeContents(ed);
-      sel.removeAllRanges();sel.addRange(range);
-      if(!document.execCommand('insertText',false,value)) throw Error('Matnni yozish amalga oshmadi.');
+      selectAll(ed);
+      document.execCommand('insertText',false,value);
+      // Editors such as Lexical apply input on the next tick.
+      await pause(80);
+      if(value && !editorValue(ed)) {
+        // Some editors ignore insertText but accept pasted text.
+        selectAll(ed);const data=new DataTransfer();data.setData('text/plain',value);
+        ed.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));
+        await pause(80);
+      }
     }
-    if(editorValue(ed)!==A.norm(value)) throw Error('Yozilgan matn tasdiqlanmadi. Chatni tekshiring.');
+    if(A.flat(editorValue(ed))!==A.flat(value)) throw Error('Yozilgan matn tasdiqlanmadi. Chatni tekshiring.');
   }
-  const pause=ms=>new Promise(r=>setTimeout(r,ms));
+  async function openThread(req) {
+    const target=A.thread(req.url);
+    if(!target) throw Error('Shaxsiy chat ochilmagan. Direct / Messenger / Telegram chatini oching.');
+    if(A.thread(location.href)===target) return {opened:true};
+    // Telegram can ignore address changes made from outside the app, so open
+    // the chat the way a person does: through its chat list entry.
+    const peer=decodeURIComponent(new URL(req.url).hash.slice(1));
+    const item=all('a[href]').find(a=>visible(a)&&A.thread(a.href)===target)||
+      all('[data-peer-id]').find(e=>visible(e)&&e.getAttribute('data-peer-id')===peer&&e.closest('#LeftColumn,#column-left'));
+    if(!item) return {opened:false};
+    for(const type of ['mousedown','mouseup'])
+      item.dispatchEvent(new MouseEvent(type,{bubbles:true,cancelable:true,button:0,view:window}));
+    item.click();
+    for(let i=0;i<20;i++) {await pause(150);if(A.thread(location.href)===target) return {opened:true};}
+    return {opened:false};
+  }
   function sendButton(ed,p,ai=false) {
     const candidates=[];
     const selectors=ai? {
@@ -173,44 +210,53 @@
     const unique=[...new Set(candidates)].filter(e=>!e.disabled&&e.getAttribute('aria-disabled')!=='true');
     return unique.length===1?unique[0]:null;
   }
+  async function waitButton(ed,p,ai=false) {
+    // Send buttons usually enable only after the editor has processed the text.
+    for(let i=0;i<10;i++) {const b=sendButton(ed,p,ai);if(b) return b;await pause(300);}
+    return null;
+  }
+  function pressEnter(ed) {
+    ed.focus();
+    for(const type of ['keydown','keyup'])
+      ed.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true,cancelable:true}));
+  }
   async function socialSend(req) {
     if(cancelled.has(req.jobId))return {status:'cancelled'};
-    let before=await snapshot();
-    if(before.signature!==req.signature||before.key!==req.key) throw Error('Suhbat o‘zgargan. Javob yangilanishi kerak.');
+    // The latest message decides; read receipts or older rows may shift the rest.
+    const changed=s=>s.key!==req.key||(req.event?s.event!==req.event:s.signature!==req.signature);
+    const before=await snapshot();
+    if(changed(before)) throw Error('Suhbat o‘zgargan. Javob yangilanishi kerak.');
     if(!before.sendable) throw Error('Oxirgi xabar kiruvchi matn sifatida tanilmadi.');
     const ed=editor(before.platform);
     if(editorValue(ed)) throw Error('Chatda qoralama bor. Uni o‘zgartirmadim.');
     if(!req.text||req.text.length>3000) throw Error('Javob 1–3000 belgidan iborat bo‘lsin.');
     if(cancelled.has(req.jobId))return {status:'cancelled'};
+    const reply=A.flat(req.text),typed=()=>A.flat(editorValue(ed))===reply;
+    const clear=async()=>{if(typed())await fill(ed,'');};
     // Persisted sending state is owned by the dashboard before this side effect.
-    fill(ed,req.text);
+    await fill(ed,req.text);
     if(req.draftOnly) return {status:'drafted'};
     await pause(250);
-    if(cancelled.has(req.jobId)){
-      if(editorValue(ed)===A.norm(req.text))fill(ed,'');
-      return {status:'cancelled'};
-    }
+    if(cancelled.has(req.jobId)){await clear();return {status:'cancelled'};}
     const now=await snapshot();
-    if(now.signature!==req.signature || now.key!==req.key) {
-      if(editorValue(ed)===A.norm(req.text)) fill(ed,'');
-      throw Error('Yangi xabar keldi. Yuborish bekor qilindi.');
-    }
-    const button=sendButton(ed,before.platform);
-    if(!button) return {status:'drafted',note:'Yuborish tugmasi tanilmadi. Javob chatga qo‘yildi; qo‘lda yuboring.'};
-    if(cancelled.has(req.jobId)){
-      if(editorValue(ed)===A.norm(req.text))fill(ed,'');
-      return {status:'cancelled'};
-    }
-    button.click();
+    if(changed(now)) {await clear();throw Error('Yangi xabar keldi. Yuborish bekor qilindi.');}
+    const button=await waitButton(ed,before.platform);
+    if(cancelled.has(req.jobId)){await clear();return {status:'cancelled'};}
+    // Without a recognizable button, Enter is how these chats send.
+    if(button) button.click(); else pressEnter(ed);
+    // Line breaks inside a sent bubble may vanish from its text, so compare without whitespace.
+    // Wide bubbles have no reliable side, so any new non-incoming copy counts.
+    const bare=v=>A.flat(v).replace(/\s/g,''),sent=r=>r.direction!=='incoming'&&bare(r.text)===bare(reply);
+    const copies=rows=>rows.filter(sent).length;
     for(let i=0;i<12;i++) {
       await pause(750);
       try {
         const after=await snapshot();
         if(after.key!==req.key) return {status:'uncertain'};
-        if(after.rows.some(r=>r.direction==='outgoing'&&A.norm(r.text)===A.norm(req.text)&&
-          !before.rows.some(o=>o.id===r.id&&o.text===r.text&&o.direction===r.direction))) return {status:'sent'};
+        if(copies(after.rows)>copies(before.rows) || (after.event!==before.event&&sent(after.latest))) return {status:'sent'};
       } catch {}
     }
+    if(typed()) return {status:'drafted',note:'Yuborish tasdiqlanmadi. Javob chatga qo‘yildi; qo‘lda yuboring.'};
     return {status:'uncertain',note:'Yuborish tasdiqlanmadi. Chatni tekshiring; qayta yuborilmaydi.'};
   }
   const aiConfig={
@@ -236,19 +282,31 @@
     const limited=/usage limit|reached.{0,20}limit|too many requests|лимит.{0,25}(исчерпан|достигнут)/i.test(alerts);
     return {provider:p,ready:!!ed,answers:responses.length,text:text(last),busy,complete,limited};
   }
+  async function submitted(p) {
+    for(let i=0;i<20;i++) {
+      await pause(250);
+      const s=aiState(),ed=first(aiConfig[p].editor);
+      if(s.busy||s.answers||!ed||!editorValue(ed)) return true;
+    }
+    return false;
+  }
   async function aiSubmit(req) {
     const p=A.platform(location.href),state=aiState();
     if(!state.ready) throw Error('AI akkauntiga kiring.');
     if(state.answers) throw Error('Yangi AI suhbati ochilmadi.');
     const ed=first(aiConfig[p].editor);
     if(editorValue(ed)) throw Error('AI yozish katagi band.');
-    fill(ed,req.text);await pause(300);
-    const button=sendButton(ed,p,true);if(!button) throw Error('AI yuborish tugmasi tanilmadi.');
-    button.click();return {submitted:true};
+    await fill(ed,req.text);await pause(300);
+    const button=await waitButton(ed,p,true);
+    if(button) button.click(); else pressEnter(ed);
+    if(await submitted(p)) return {submitted:true};
+    if(button) {pressEnter(first(aiConfig[p].editor)||ed);if(await submitted(p)) return {submitted:true};}
+    throw Error('AI so‘rovi yuborilmadi. Sahifani tekshiring.');
   }
   chrome.runtime.onMessage.addListener((req,sender,respond)=>{
     if(sender.id!==chrome.runtime.id||!req?.aiy) return;
     const methods={cancel:()=>{cancelled.add(req.jobId);return {cancelled:true};},ping:()=>({platform:A.platform(location.href)}),snapshot,discover,
+      openThread:()=>openThread(req),
       socialSend:()=>socialSend(req),aiState,aiSubmit:()=>aiSubmit(req)};
     if(!methods[req.type]) return;
     Promise.resolve().then(methods[req.type]).then(data=>respond({ok:true,data}))

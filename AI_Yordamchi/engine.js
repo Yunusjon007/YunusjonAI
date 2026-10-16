@@ -1,5 +1,17 @@
 const A=globalThis.AIY;
-const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+// Chrome throttles timers in hidden tabs, down to once a minute after a while,
+// which stalled every wait while the dashboard sat behind other tabs.
+let timer=null,timerFailed=false,timerSeq=0;const timerWaits=new Map();
+function sleep(ms) {
+  if(!timer&&!timerFailed&&typeof Worker==='function'&&typeof document!=='undefined') {
+    try {
+      timer=new Worker(new URL('./timer.js',import.meta.url));
+      timer.onmessage=({data})=>{timerWaits.get(data)?.();timerWaits.delete(data);};
+    } catch {timerFailed=true;}
+  }
+  if(!timer)return new Promise(resolve=>setTimeout(resolve,ms));
+  return new Promise(resolve=>{const id=++timerSeq;timerWaits.set(id,resolve);timer.postMessage({id,ms});});
+}
 export const terminalStates=new Set(['sent','skipped','stale','drafted','uncertain','baseline','cancelled']);
 export function ingest(state,snap,{baseline=false,manual=false}={}) {
   const old=state.seen[snap.key];
@@ -70,6 +82,18 @@ export class Controller {
     if(!result?.ok) throw Error(result?.error||'Sahifa javob bermadi.');
     return result.data;
   }
+  async read(id,token=null) {
+    // Chats render progressively; only trust a snapshot that holds still.
+    let last=null;
+    for(let i=0;i<4;i++) {
+      if(token!==null)this.alive(token);
+      let snap;
+      try {snap=await this.rpc(id,'snapshot');} catch(e) {if(i===3)throw e;await this.delay(1000);continue;}
+      if(last?.signature===snap.signature)return snap;
+      last=snap;await this.delay(800);
+    }
+    throw Error('Chat hali yuklanmoqda. Keyingi tekshiruvda qayta ko‘riladi.');
+  }
   async attach(id) {
     try {return await this.rpc(id,'ping');} catch {}
     await chrome.scripting.executeScript({target:{tabId:id},files:['shared.js','content.js']});
@@ -96,17 +120,18 @@ export class Controller {
     await chrome.tabs.create({url:source.url,active:true});
   }
   async worker(platform,url,token=null) {
+    // Without a url, any page of the platform will do for discovering chats.
     let id=this.workers[platform];
     if(id) {
       try {
         const tab=await chrome.tabs.get(id);
         if(A.platform(tab.url)!==platform) id=null;
-        else {
+        else if(url&&tab.url!==url) {
           try {
             const snap=await this.rpc(id,'snapshot');
             if(snap.draft && A.thread(url)!==snap.key) throw Error('Ishchi chatda qoralama bor. Uni avval ko‘rib chiqing.');
           } catch(e) {if(e.message.includes('Ishchi chatda qoralama'))throw e;}
-          if(tab.url!==url)await chrome.tabs.update(id,{url,active:false});
+          await this.navigate(id,tab.url,url);
         }
       } catch(e) {
         if(e.message.includes('qoralama'))throw e;
@@ -114,10 +139,19 @@ export class Controller {
       }
     }
     if(!id) {
-      const tab=await chrome.tabs.create({url,active:false});id=tab.id;this.workers[platform]=id;
+      const tab=await chrome.tabs.create({url:url||A.sources[platform].url,active:false});id=tab.id;this.workers[platform]=id;
       await chrome.tabs.update(id,{autoDiscardable:false}).catch(()=>{});
     }
     await this.waitTab(id,token);return id;
+  }
+  async navigate(id,from,url) {
+    if(A.platform(url)==='telegram'&&from.split('#')[0]===url.split('#')[0]) {
+      // Telegram switches chats by URL hash, which it may ignore when changed from outside.
+      const result=await this.rpc(id,'openThread',{url}).catch(()=>null);
+      if(result?.opened)return;
+      await chrome.tabs.update(id,{url,active:false});await chrome.tabs.reload(id);return;
+    }
+    await chrome.tabs.update(id,{url,active:false});
   }
   async openChat(job) {await chrome.tabs.create({url:job.url,active:true});}
   async inspect() {
@@ -156,11 +190,11 @@ export class Controller {
       const candidates=new Map();
       for(const t of open)if(A.platform(t.url)===platform&&A.thread(t.url)&&!Object.values(this.workers).includes(t.id))
         candidates.set(A.thread(t.url),{url:t.url,title:t.title});
-      for(const [key,t]of Object.entries(this.state.pinned))if(t.platform===platform)candidates.set(key,t);
-      for(const [key,t]of Object.entries(this.state.seen))if(A.platform(t.url)===platform)candidates.set(key,t);
+      for(const [key,t]of Object.entries(this.state.pinned))if(t.platform===platform&&A.thread(t.url))candidates.set(key,t);
+      for(const [key,t]of Object.entries(this.state.seen))if(A.platform(t.url)===platform&&A.thread(t.url))candidates.set(key,t);
       this.activity=A.sources[platform].name+' chatlari tekshirilmoqda…';this.change();
       try {
-        const id=await this.worker(platform,A.sources[platform].url,token);
+        const id=await this.worker(platform,null,token);
         const d=await this.rpc(id,'discover');
         for(const t of d.threads)candidates.set(t.key,t);
       } catch(e) {this.status[platform]=e.message;this.change();}
@@ -173,7 +207,7 @@ export class Controller {
       for(const t of batch) {
         this.alive(token);
         try {
-          const id=await this.worker(platform,t.url,token),snap=await this.rpc(id,'snapshot');
+          const id=await this.worker(platform,t.url,token),snap=await this.read(id,token);
           // Verify navigation identity; hash-based chats can load asynchronously.
           if(snap.key!==A.thread(t.url))throw Error('Chat hali yuklanmagan. Keyingi tekshiruvda qayta ko‘riladi.');
           const j=ingest(this.state,snap,{baseline:!this.state.seen[snap.key]});read++;
@@ -183,6 +217,8 @@ export class Controller {
       }
       if(read)this.status[platform]=`${read} / ${list.length} ta topilgan chat tekshirildi`;
       this.change();
+      // Answer what was found before spending minutes on the next network.
+      await this.drain(token);
     }
   }
   async generate(job,token) {
@@ -226,23 +262,39 @@ export class Controller {
     }
     throw Error('AI javobi olinmadi. Login/limitni tekshiring. Navbat saqlandi; 15 daqiqadan keyin qayta urinadi.');
   }
-  async process(token) {
-    const job=Object.values(this.state.jobs).filter(j=>(j.status==='pending'&&j.retryAt<=Date.now()) || (this.settings.mode==='auto'&&j.status==='ready')).sort((a,b)=>a.created-b.created)[0];
+  nextJob(skip=new Set()) {
+    return Object.values(this.state.jobs).filter(j=>!skip.has(j.id)&&(j.retryAt||0)<=Date.now()&&
+      (j.status==='pending' || (this.settings.mode==='auto'&&j.status==='ready'))).sort((a,b)=>a.created-b.created)[0];
+  }
+  async drain(token) {
+    const done=new Set();
+    for(let n=0;n<5;n++) {
+      this.alive(token);const job=this.nextJob(done);if(!job)return;
+      done.add(job.id);await this.process(token,job);
+    }
+  }
+  async process(token,job=this.nextJob()) {
     if(!job)return;
     try {
       this.alive(token);
-      const id=await this.worker(job.platform,job.url,token),fresh=await this.rpc(id,'snapshot');
-      if(fresh.signature!==job.signature||!fresh.sendable){job.status='stale';job.note='Suhbat yangilangan.';await this.save();return;}
+      const id=await this.worker(job.platform,job.url,token),fresh=await this.read(id,token);
+      // Only a different latest message makes the job stale; receipts and older rows may change freely.
+      if(fresh.key!==job.key||fresh.event!==job.id){job.status='stale';job.note='Suhbat yangilangan.';await this.save();this.change();return;}
+      if(!fresh.sendable)throw Error('Oxirgi xabar hali kiruvchi matn sifatida tanilmadi.');
+      job.signature=fresh.signature;job.rows=fresh.rows;
       if(job.status==='ready'){await this.send(job.id,job.reply,false,token);return;}
       job.status='generating';await this.save();this.change();
       const reply=await this.generate(job,token);this.alive(token);
-      job.reply=reply.text;job.provider=reply.provider;job.status='ready';job.updated=Date.now();await this.save();this.change();
+      job.reply=reply.text;job.provider=reply.provider;job.status='ready';job.note='';job.updated=Date.now();await this.save();this.change();
       if(this.settings.mode==='auto')await this.send(job.id,job.reply,false,token);
     } catch(e) {
-      if(job.status==='generating') {
-        job.status='pending';job.retryAt=this.running?Date.now()+15*60*1000:0;job.note=e.message;
+      if(['pending','generating','ready'].includes(job.status)) {
+        // AI failures wait out provider cooldowns; page problems retry on the next pass.
+        const minutes=job.status==='generating'?15:1;
+        if(job.status==='generating')job.status='pending';
+        job.retryAt=this.running?Date.now()+minutes*60*1000:0;job.note=e.message;
       }
-      this.log(e.message,'warn');await this.save();
+      this.log(e.message,'warn');await this.save();this.change();
     }
   }
   async send(id,reply,draftOnly=false,token=null) {
@@ -252,15 +304,15 @@ export class Controller {
     const tab=await this.worker(job.platform,job.url,token);
     if(token!==null)this.alive(token);
     const fresh=await this.rpc(tab,'snapshot');
-    if(fresh.signature!==job.signature||fresh.key!==job.key) {
+    if(fresh.event!==job.id||fresh.key!==job.key) {
       job.status='stale';job.note='Suhbat o‘zgardi. Yangi javob kerak.';await this.save();this.change();return;
     }
     if(fresh.draft)throw Error('Chatda qoralama bor; avval uni ko‘rib chiqing.');
-    job.reply=reply;job.status='sending';job.updated=Date.now();await this.save();
+    job.signature=fresh.signature;job.reply=reply;job.status='sending';job.updated=Date.now();await this.save();
     if(token!==null && (!this.running||token!==this.runToken)) {job.status='ready';await this.save();return;}
     this.activeSend={tab,id:job.id};this.change();
     try {
-      const result=await this.rpc(tab,'socialSend',{text:reply,signature:job.signature,key:job.key,draftOnly,jobId:job.id});
+      const result=await this.rpc(tab,'socialSend',{text:reply,signature:job.signature,event:job.id,key:job.key,draftOnly,jobId:job.id});
       job.status=result.status;job.note=result.note||'';
       this.log(A.sources[job.platform].name+': '+({sent:'javob brauzerda tasdiqlandi.',drafted:'javob chatga qo‘yildi.',uncertain:'yuborishni tekshirish kerak.',cancelled:'yuborish bekor qilindi.'}[result.status]||result.status));
       if(result.status==='drafted')await chrome.tabs.update(tab,{active:true});
@@ -290,7 +342,7 @@ export class Controller {
     let baseline=true;
     while(this.running&&token===this.runToken) {
       this.busy=true;this.change();
-      try {await this.scan(token,baseline);baseline=false;await this.process(token);}
+      try {await this.drain(token);await this.scan(token,baseline);baseline=false;}
       catch(e){if(this.running)this.log(e.message,'warn');}
       finally{this.busy=false;this.change();}
       if(!this.running||token!==this.runToken)break;
