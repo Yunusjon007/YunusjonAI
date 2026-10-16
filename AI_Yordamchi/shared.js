@@ -1,5 +1,5 @@
 (() => {
-  if (globalThis.AIY?.version === 3) return;
+  if (globalThis.AIY?.version === 4) return;
   const norm = value => String(value ?? '').replace(/\u00a0/g,' ').replace(/[ \t]+/g,' ').trim();
   // Rich editors render each line as its own paragraph, so line breaks never
   // round-trip exactly. Compare typed and rendered text word by word instead.
@@ -43,11 +43,9 @@
     return left<right ? 'incoming':'outgoing';
   }
   const sources={
-    // Instagram keeps Primary and General chats on separate list pages.
-    instagram:{name:'Instagram',url:'https://www.instagram.com/direct/inbox/',
-      lists:['https://www.instagram.com/direct/inbox/','https://www.instagram.com/direct/general/']},
-    facebook:{name:'Facebook',url:'https://www.facebook.com/messages/',lists:['https://www.facebook.com/messages/']},
-    telegram:{name:'Telegram',url:'https://web.telegram.org/a/',lists:['https://web.telegram.org/a/']},
+    instagram:{name:'Instagram',url:'https://www.instagram.com/direct/inbox/'},
+    facebook:{name:'Facebook',url:'https://www.facebook.com/messages/'},
+    telegram:{name:'Telegram',url:'https://web.telegram.org/a/'},
     chatgpt:{name:'ChatGPT',url:'https://chatgpt.com/'},
     claude:{name:'Claude',url:'https://claude.ai/new'},
     gemini:{name:'Gemini',url:'https://gemini.google.com/app'}
@@ -55,5 +53,5 @@
   const defaults={mode:'review',platforms:['instagram','facebook','telegram'],
     providers:['chatgpt','claude','gemini'],interval:30,maxThreads:20,
     rules:'Mijoz yozgan tilda qisqa, muloyim javob bering. Faqat tasdiqlangan ma’lumotlardan foydalaning. Narx, manzil yoki xizmat noma’lum bo‘lsa aniqlashtiring. O‘zingizni avtomatik yordamchi deb tanishtirishni yashirmang.\n\nBiznes ma’lumotlari: [shu yerga yozing]'};
-  globalThis.AIY={version:3,norm,flat,platform,thread,messagesPage,digest,geometryDirection,sources,defaults};
+  globalThis.AIY={version:4,norm,flat,platform,thread,messagesPage,digest,geometryDirection,sources,defaults};
 })();

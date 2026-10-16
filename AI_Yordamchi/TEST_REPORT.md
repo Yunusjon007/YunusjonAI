@@ -1,11 +1,18 @@
 # Validation — 2026-10-16
 
-58 automated checks passed using Node and local Chromium on synthetic fixtures:
+60 automated checks passed using Node and local Chromium on synthetic fixtures:
 
 - 28 engine checks: unread chats answered on first sight, baselines, duplicate prevention, stale replies, saved send state, uncertain outcomes, cancellation, provider fallback, review mode, Telegram group filtering, answering queued messages before the next network is scanned and retry timing.
-- 22 DOM checks: unread markers in chat lists (blue dots, counter badges, skipped groups and archive), opening unread rows, incoming/outgoing messages, editor scope, drafts, changed conversations, media, AI response completion, multi-line prompts and replies in paragraph-based editors, Enter fallback and read receipts.
+- 24 DOM checks: unread markers in chat lists (blue dots, bold previews, counter badges, skipped groups and archive), the masked diagnostic report, opening unread rows, incoming/outgoing messages, editor scope, drafts, changed conversations, media, AI response completion, multi-line prompts and replies in paragraph-based editors, Enter fallback and read receipts.
 - 5 dashboard checks: settings, narrow viewport, safe rendering of customer text, protection against simultaneous controllers and background-safe timers.
 - 3 end-to-end checks: the unpacked extension runs in Chromium against look-alike Instagram, Telegram and ChatGPT pages served locally. It answers an unread Instagram message in the General folder and an unread Telegram private chat without any chat being opened by hand, leaves read chats and groups alone, and answers a chat queued from the manual check.
+
+## Changes in 1.0.3
+
+- Instagram's General folder is opened with its tab instead of an assumed address.
+- A bold preview line also counts as unread on Instagram and Messenger.
+- Telegram Web K is used when that is the version open in the browser.
+- The activity section has a diagnostic report button. The report lists what each Instagram, Facebook and Telegram tab shows (chat rows found, unread markers, folder tabs, page visibility) with letters masked, so no names or message text are included.
 
 ## Changes in 1.0.2
 

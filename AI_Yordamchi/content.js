@@ -1,7 +1,7 @@
 (() => {
   // Versioned so an updated extension replaces a copy left behind by the old one.
-  if(globalThis.__AIY_CONTENT__===3) return;
-  globalThis.__AIY_CONTENT__=3;
+  if(globalThis.__AIY_CONTENT__===4) return;
+  globalThis.__AIY_CONTENT__=4;
   const A=globalThis.AIY;
   const cancelled=new Set();
   const all=(sel,root=document)=>Array.from(root.querySelectorAll(sel));
@@ -160,7 +160,41 @@
       if(b.width>=5&&b.width<=16&&Math.abs(b.width-b.height)<=2&&c[2]>150&&c[2]>c[0]+60) return true;
       if(/^\d{1,4}\+?$/.test(text(e))&&b.height>=12) return true;
     }
+    // Instagram and Messenger also print an unread preview in bold under the name.
+    if(['instagram','facebook'].includes(A.platform(location.href))) {
+      const lines=all('span,div',row).filter(e=>!e.children.length&&visible(e)&&text(e));
+      return lines.slice(1).some(e=>parseInt(getComputedStyle(e).fontWeight)>=600&&!/^\d|·/.test(text(e)));
+    }
     return false;
+  }
+  // Instagram splits chats into Primary and General tabs; Requests need accepting first.
+  const folderNames=/^(primary|general|основные|общие|asosiy|umumiy)$/i;
+  const folderTabs=()=>all('[role="tab"],a[href],[role="button"]').filter(e=>visible(e)&&folderNames.test(text(e)));
+  const folders=()=>[...new Set(folderTabs().map(text))];
+  async function openFolder(req) {
+    const tab=folderTabs().find(e=>text(e)===req.name);
+    if(!tab) return {opened:false};
+    tab.click();await pause(1500);return {opened:true};
+  }
+  // Masked page structure for the diagnostic report: no names or message text.
+  const mask=v=>A.norm(v).replace(/\p{L}/gu,'x').slice(0,40);
+  async function diagnose() {
+    const p=A.platform(location.href);
+    const raf=await Promise.race([new Promise(r=>requestAnimationFrame(()=>r(true))),pause(700).then(()=>false)]);
+    let ed=null,edError='';try {ed=editor(p);} catch(e) {edError=e.message;}
+    const rows=chatRows(),count=s=>{try {return all(s).length;} catch {return -1;}};
+    const describe=e=>{const b=e.getBoundingClientRect(),st=getComputedStyle(e);
+      return {tag:e.tagName.toLowerCase(),role:e.getAttribute('role')||'',cls:String(e.className?.baseVal??e.className??'').slice(0,60),
+        label:(l=>/^(unread|непрочитан|o.qilmagan|online|в сети|verified|подтвержд)/i.test(l)?l:mask(l))(A.norm(e.getAttribute('aria-label')||'')).slice(0,30),w:Math.round(b.width),h:Math.round(b.height),
+        bg:st.backgroundColor,fill:e instanceof SVGElement?st.fill:'',radius:st.borderRadius,weight:st.fontWeight,text:mask(e.childElementCount?'':text(e))};};
+    return {version:chrome.runtime.getManifest().version,platform:p,path:location.pathname.replace(/\d{4,}/g,'#'),hash:!!location.hash,
+      visibility:document.visibilityState,raf,editor:!!ed,editorError:edError,chat:!!A.thread(location.href),folders:folders(),
+      counts:Object.fromEntries(['[role="button"]','[role="listitem"]','[role="row"]','[role="tab"]','a[href*="/direct/t/"]','a[href*="/t/"]',
+        '[aria-label*="nread" i]','#LeftColumn','#column-left','.ListItem','.chatlist-chat','.ChatBadge','.badge','[data-peer-id]','img'].map(s=>[s,count(s)])),
+      rows:rows.length,unread:rows.filter(unreadMark).length,
+      samples:rows.slice(0,8).map(r=>({row:describe(r),unread:unreadMark(r),
+        small:all('*',r).filter(e=>{const b=e.getBoundingClientRect();return b.width&&b.width<=40&&b.height<=30;}).slice(0,12).map(describe),
+        lines:all('span,div',r).filter(e=>!e.children.length&&visible(e)&&text(e)).slice(0,5).map(describe)}))};
   }
   function unread() {
     const p=A.platform(location.href);
@@ -348,6 +382,7 @@
     if(sender.id!==chrome.runtime.id||!req?.aiy) return;
     const methods={cancel:()=>{cancelled.add(req.jobId);return {cancelled:true};},ping:()=>({platform:A.platform(location.href)}),snapshot,unread,
       openThread:()=>openThread(req),openUnread:()=>openUnread(req),
+      folders,openFolder:()=>openFolder(req),diagnose,
       socialSend:()=>socialSend(req),aiState,aiSubmit:()=>aiSubmit(req)};
     if(!methods[req.type]) return;
     Promise.resolve().then(methods[req.type]).then(data=>respond({ok:true,data}))

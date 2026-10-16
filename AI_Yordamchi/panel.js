@@ -87,9 +87,11 @@ $('save').addEventListener('click',async()=>{try{notice();await engine.configure
 $('start').addEventListener('click',async()=>{try{notice();await engine.configure(settingsFromUI());await engine.start();}catch(e){notice(e.message);}});
 $('stop').addEventListener('click',()=>engine.stop().catch(e=>notice(e.message)));
 $('inspect').addEventListener('click',async()=>{try{notice();await engine.configure(settingsFromUI());previews=await engine.inspect();renderPreviews();}catch(e){notice(e.message);}});
-$('export').addEventListener('click',()=>{
-  const report={version:'1.0.2',time:new Date().toISOString(),statuses:engine.status,
-    logs:engine.state.logs,counts:Object.values(engine.state.jobs).reduce((o,j)=>(o[j.status]=(o[j.status]||0)+1,o),{})};
+$('export').addEventListener('click',async()=>{
+  const pages=await engine.diagnose().catch(e=>[{error:e.message}]);
+  const report={version:chrome.runtime.getManifest?.().version,time:new Date().toISOString(),running:engine.running,
+    settings:{platforms:engine.settings.platforms,providers:engine.settings.providers,mode:engine.settings.mode},statuses:engine.status,
+    logs:engine.state.logs,counts:Object.values(engine.state.jobs).reduce((o,j)=>(o[j.status]=(o[j.status]||0)+1,o),{}),pages};
   const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));
   const a=node('a');a.href=url;a.download='AI_Yordamchi_holat.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 });

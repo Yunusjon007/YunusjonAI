@@ -32,10 +32,12 @@ const chats=JSON.parse(localStorage.getItem('chats')||'null')||{
 const save=()=>localStorage.setItem('chats',JSON.stringify(chats));
 function render(){
   const path=location.pathname,parts=path.split('/'),open=parts[2]==='t'?parts[3]:undefined;
-  if(path.startsWith('/direct/general'))sessionStorage.setItem('folder','general');
-  else if(!open)sessionStorage.setItem('folder','inbox');
   if(chats[open]?.unread){chats[open].unread=false;save();}
   const list=document.getElementById('list');list.innerHTML='';
+  // Folder tabs, as on Instagram: Primary, General and Requests.
+  for(const [folder,name] of [['inbox','Primary'],['general','General'],['requests','Запросы']]){
+    const tab=document.createElement('div');tab.setAttribute('role','tab');tab.textContent=name;
+    tab.onclick=()=>{sessionStorage.setItem('folder',folder);render();};list.append(tab);}
   for(const [id,c] of Object.entries(chats))if(c.folder===(sessionStorage.getItem('folder')||'inbox')){
     const r=document.createElement('div');r.className='row';r.setAttribute('role','button');r.tabIndex=0;
     r.innerHTML='${avatar}<div><div class="name"></div><div class="prev"></div></div>'+(c.unread?'<span class="dot"></span>':'');
@@ -103,11 +105,16 @@ async function launch() {
     executablePath:process.env.AIY_CHROMIUM||chromium.executablePath(),headless:true,viewport:{width:1200,height:900},
     args:['--no-sandbox','--disable-dev-shm-usage','--disable-gpu',`--disable-extensions-except=${base}`,`--load-extension=${base}`,
       '--ignore-certificate-errors','--no-proxy-server','--host-resolver-rules='+hosts.map(h=>`MAP ${h} 127.0.0.1:${port}`).join(', ')]});
-  let [worker]=context.serviceWorkers();worker||=await context.waitForEvent('serviceworker');
-  const panel=await context.newPage();await panel.goto(`chrome-extension://${new URL(worker.url()).host}/panel.html`);
-  await panel.waitForSelector('.account');
-  for(const p of context.pages())if(p!==panel&&p.url().endsWith('/panel.html'))await p.close();
-  return {context,panel,close:async()=>{await context.close();server.closeAllConnections();server.close();}};
+  const close=async()=>{await context.close();server.closeAllConnections();server.close();};
+  try {
+    let [worker]=context.serviceWorkers();worker||=await context.waitForEvent('serviceworker');
+    // Installing opens the dashboard; only one dashboard may control the extension, so use that one.
+    const url=`chrome-extension://${new URL(worker.url()).host}/panel.html`;
+    let panel=context.pages().find(p=>p.url()===url)||await context.waitForEvent('page',{predicate:p=>p.url()===url,timeout:5000}).catch(()=>null);
+    if(!panel){panel=await context.newPage();await panel.goto(url);}
+    await panel.waitForSelector('.account');
+    return {context,panel,close};
+  } catch(e) {await close();throw e;}
 }
 const queue=panel=>panel.locator('#queue').innerText();
 
@@ -143,6 +150,12 @@ test('an unread Instagram message in General is answered without opening any cha
     // Read chats are left alone, even when their last message is incoming.
     assert.equal(await sent(ig,'ali'),null);assert.equal(await sent(ig,'test'),null);
     await panel.click('#stop');
+    // The diagnostic report covers the Instagram worker tab without its text.
+    await panel.evaluate(()=>{const create=URL.createObjectURL;URL.createObjectURL=blob=>{blob.text().then(t=>window.report=t);return create(blob);};
+      HTMLAnchorElement.prototype.click=function(){};});
+    await panel.click('#export');const report=JSON.parse(await (await panel.waitForFunction(()=>window.report,null,{timeout:30000})).jsonValue());
+    const page=report.pages.find(p=>p.platform==='instagram'&&p.worker);
+    assert.ok(page.rows>=2);assert.deepEqual(page.folders,['Primary','General']);assert.ok(!JSON.stringify(report).includes('Valiyev'));
   } finally {await close();}
 });
 

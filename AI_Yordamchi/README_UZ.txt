@@ -7,7 +7,7 @@ O‘RNATISH (bir marta):
 4. Load unpacked / Загрузить распакованное расширение ni bosing.
 5. Ichida manifest.json bor AI_Yordamchi papkasini tanlang.
 
-YANGI VERSIYAGA O‘TISH (1.0.2):
+YANGI VERSIYAGA O‘TISH (1.0.3):
 1. Eski AI_Yordamchi papkasidagi fayllarni yangi ZIP ichidagilar bilan almashtiring.
 2. chrome://extensions sahifasida AI Yordamchi kartasidagi ↻ (Reload / Обновить) tugmasini bosing.
 3. Ochiq Instagram, Facebook va Telegram tablarini bir marta yangilang (F5).
@@ -29,6 +29,9 @@ Primary (Основные) va General (Общие) ikkalasi tekshiriladi. O‘qi
 ko‘rishdayoq javob beriladi; o‘qilgan eski chatlarga tegilmaydi. Shuning uchun xabarni
 kengaytma ko‘rishidan oldin o‘zingiz ochib o‘qib qo‘ymang.
 Telegram’da faqat shaxsiy chatlarga javob beriladi; guruh va kanallar o‘tkaziladi.
+
+ISHLAMASA: «Boshlash»dan 1–2 daqiqa keyin «Faoliyat tarixi» ichidagi «Diagnostika hisobotini
+yuklash» tugmasini bosing va faylni yuboring. Unda ismlar va xabar matnlari yo‘q.
 Boshqaruv oynasi orqa fonda (boshqa tab ochiq) bo‘lsa ham ishlayveradi, lekin uni yopmang.
 
 Avval javobni ko‘rsatish rejimida sinang. Keyin avtomatik rejimni tanlash mumkin.

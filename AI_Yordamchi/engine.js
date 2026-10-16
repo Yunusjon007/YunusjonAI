@@ -190,11 +190,18 @@ export class Controller {
     if(j)this.log(A.sources[snap.platform].name+': yangi xabar navbatga qo‘shildi.');
     return j;
   }
+  listFor(platform,open) {
+    // Use the Telegram version the user is signed in to; Web A and Web K keep separate logins.
+    if(platform==='telegram'&&open.some(t=>t.url?.startsWith('https://web.telegram.org/k/'))&&
+      !open.some(t=>t.url?.startsWith('https://web.telegram.org/a/')))return 'https://web.telegram.org/k/';
+    return A.sources[platform].url;
+  }
   async listTab(platform,list,token) {
-    // A single chat list stays loaded; Instagram's two lists are separate pages.
-    if(A.sources[platform].lists.length===1&&this.workers[platform]) {
+    // The chat list stays loaded between passes instead of reloading the page.
+    if(this.workers[platform]) {
       const tab=await chrome.tabs.get(this.workers[platform]).catch(()=>null);
-      if(tab&&A.messagesPage(tab.url))return this.worker(platform,null,token);
+      if(tab&&A.messagesPage(tab.url)&&new URL(tab.url).pathname.startsWith(new URL(list).pathname.slice(0,3)))
+        return this.worker(platform,null,token);
     }
     return this.worker(platform,list,token);
   }
@@ -210,15 +217,17 @@ export class Controller {
         try {await this.attach(t.id);this.take(await this.read(t.id,token));} catch {}
         this.alive(token);
       }
-      // Read unread markers from the chat list and open only those chats.
-      for(const list of A.sources[platform].lists) {
-        try {
-          const id=await this.listTab(platform,list,token);
-          // A message in the chat already open may never show as unread.
-          if(A.thread((await chrome.tabs.get(id)).url)) {
-            const current=await this.read(id,token).catch(e=>{this.alive(token);return null;});
-            if(current)this.take(current);
-          }
+      try {
+        const id=await this.listTab(platform,this.listFor(platform,open),token);
+        // A message in the chat already open may never show as unread.
+        if(A.thread((await chrome.tabs.get(id)).url)) {
+          const current=await this.read(id,token).catch(e=>{this.alive(token);return null;});
+          if(current)this.take(current);
+        }
+        const folders=await this.rpc(id,'folders');
+        for(const folder of folders.length?folders:[null]) {
+          if(folder)await this.rpc(id,'openFolder',{name:folder});
+          // Read unread markers from the chat list and open only those chats.
           const done=new Set();
           for(let n=0;n<this.settings.maxThreads;n++) {
             this.alive(token);
@@ -231,16 +240,27 @@ export class Controller {
             try {snap=await this.read(id,token);} catch(e) {this.alive(token);error=e.message;continue;}
             if(snap.key===result.key){this.take(snap,true);opened++;}
           }
-        } catch(e) {
-          if(!this.running||token!==this.runToken)throw e;
-          error=e.message;
         }
+      } catch(e) {
+        if(!this.running||token!==this.runToken)throw e;
+        error=e.message;
       }
       this.status[platform]=error||(opened?`${opened} ta o‘qilmagan chat ochildi`:'Yangi o‘qilmagan xabar yo‘q');
       await this.save();this.change();
       // Answer what was found before moving on to the next network.
       await this.drain(token);
     }
+  }
+  async diagnose() {
+    // What each social tab shows, without names or message text, for troubleshooting.
+    const pages=[];
+    for(const tab of await chrome.tabs.query({})) {
+      if(!['instagram','facebook','telegram'].includes(A.platform(tab.url)))continue;
+      const worker=Object.values(this.workers).includes(tab.id);
+      try {await this.attach(tab.id);pages.push({worker,active:tab.active,...await this.rpc(tab.id,'diagnose')});}
+      catch(e) {pages.push({worker,platform:A.platform(tab.url),error:e.message});}
+    }
+    return pages;
   }
   async generate(job,token) {
     for(const provider of this.settings.providers) {

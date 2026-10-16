@@ -179,3 +179,15 @@ test('opening an unread row waits for the chat it opened',async()=>{
   const {data:[row]}=await call(p,'unread');const r=await call(p,'openUnread',{id:row.id});
   assert.deepEqual(r.data,{opened:true,key:'instagram:yv'});await p.close();
 });
+test('bold preview marks an Instagram chat unread when no dot is drawn',async()=>{
+  const row=(name,weight)=>`<div role="button" style="display:flex;width:340px;height:72px"><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" style="width:56px;height:56px"><div><div style="font-weight:600">${name}</div><div><span style="font-weight:${weight}">Salom yordam kerak</span><span> · 1 мин.</span></div></div></div>`;
+  const p=await pageWith(row('Yunusjon','700')+row('Ali','400'),'https://www.instagram.com/direct/inbox/');
+  const {data}=await call(p,'unread');assert.deepEqual(data.map(r=>r.title),['Yunusjon']);await p.close();
+});
+test('diagnostic report describes the chat list without names or message text',async()=>{
+  const p=await pageWith('<div role="tab">Primary</div><div role="tab">General</div><div role="button" style="display:flex;width:340px;height:72px"><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" style="width:56px;height:56px"><div>Yunusjon Valiyev</div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:rgb(0,149,246)"></span></div>','https://www.instagram.com/direct/inbox/');
+  await p.evaluate(()=>{window.chrome.runtime.getManifest=()=>({version:'test'});});
+  const {data}=await call(p,'diagnose');
+  assert.equal(data.rows,1);assert.equal(data.unread,1);assert.deepEqual(data.folders,['Primary','General']);
+  assert.ok(!JSON.stringify(data).includes('Yunusjon'));await p.close();
+});
