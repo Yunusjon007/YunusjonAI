@@ -1,7 +1,7 @@
 (() => {
   // Versioned so an updated extension replaces a copy left behind by the old one.
-  if(globalThis.__AIY_CONTENT__===2) return;
-  globalThis.__AIY_CONTENT__=2;
+  if(globalThis.__AIY_CONTENT__===3) return;
+  globalThis.__AIY_CONTENT__=3;
   const A=globalThis.AIY;
   const cancelled=new Set();
   const all=(sel,root=document)=>Array.from(root.querySelectorAll(sel));
@@ -129,24 +129,65 @@
       signature,event,readable:true,sendable:latest.direction==='incoming'&&!latest.unsupported&&!!latest.text,
       draft:!!editorValue(ed)};
   }
-  function discover() {
-    const p=A.platform(location.href), found=new Map();
-    for(const a of all('a[href]')) {
-      if(!visible(a)) continue;
-      const url=a.href,key=A.thread(url);
-      if(key&&A.platform(url)===p) found.set(key,{url,key,title:text(a).slice(0,70)});
+  const rowId=row=>text(row).slice(0,160);
+  function chatRows() {
+    const p=A.platform(location.href);
+    const root=p==='telegram'?first(['#LeftColumn','#column-left'])||document:document;
+    let panel=null;
+    try {const ed=editor(p);panel=ed&&scopeFor(p,ed);} catch {}
+    const rows=all('a[href],[role="button"],[role="link"],[role="listitem"],[role="row"],.ListItem,.chatlist-chat',root).filter(e=>{
+      if(!visible(e)||panel?.contains(e)||e.closest('[contenteditable="true"]')) return false;
+      const b=e.getBoundingClientRect();
+      // A chat list entry is a wide, short row with a picture and a name.
+      return b.width>=180&&b.height>=40&&b.height<=140&&!!text(e)&&
+        !!e.querySelector('img,svg image,canvas,.Avatar,.avatar-element,[data-peer-id]');
+    });
+    return rows.filter(e=>!rows.some(other=>other!==e&&e.contains(other)));
+  }
+  function unreadMark(row) {
+    const marked=e=>/^(unread|непрочитан|o[‘'’]qilmagan)/i.test(e.getAttribute('aria-label')||'');
+    if(marked(row)||all('[aria-label]',row).some(marked)) return true;
+    for(const e of all('*',row)) {
+      const b=e.getBoundingClientRect();
+      if(!b.width||b.width>40||b.height>30) continue;
+      const st=getComputedStyle(e);
+      const c=(e instanceof SVGElement?st.fill:st.backgroundColor).match(/[\d.]+/g)?.map(Number)||[];
+      if(c.length<3||(c.length>3&&c[3]<.5)) continue;
+      const round=e instanceof SVGCircleElement||st.borderRadius.includes('%')||
+        parseFloat(st.borderRadius)>=Math.min(b.width,b.height)/2-1;
+      if(!round) continue;
+      // A small blue dot (Instagram, Messenger) or a counter badge (Telegram).
+      if(b.width>=5&&b.width<=16&&Math.abs(b.width-b.height)<=2&&c[2]>150&&c[2]>c[0]+60) return true;
+      if(/^\d{1,4}\+?$/.test(text(e))&&b.height>=12) return true;
     }
-    if(p==='telegram') {
-      for(const e of all('[data-peer-id],a.chatlist-chat')) {
-        const id=e.getAttribute('data-peer-id');
-        if(!visible(e)||!id||!/^[-\d]+$/.test(id)) continue;
-        // Only Web K explicitly exposes peer ids in the chat list.
-        if(location.pathname.startsWith('/k/')) {
-          const url=location.origin+'/k/#'+id;found.set(A.thread(url),{url,key:A.thread(url),title:text(e).slice(0,70)});
-        }
-      }
+    return false;
+  }
+  function unread() {
+    const p=A.platform(location.href);
+    return chatRows().filter(unreadMark).map(row=>{
+      const link=row.matches('a[href]')?row:row.querySelector('a[href]');
+      const peer=row.querySelector('[data-peer-id]')?.getAttribute('data-peer-id')||row.getAttribute('data-peer-id')||'';
+      // Only private chats are answered: Telegram groups and channels have negative ids,
+      // and links that lead anywhere but a chat (archive, settings) are skipped.
+      const chat=link?!!A.thread(link.href):p!=='telegram'||/^\d+$/.test(peer);
+      return {id:rowId(row),title:text(row).split('\n')[0].slice(0,70),skip:!chat||peer.startsWith('-')};
+    });
+  }
+  async function openUnread(req) {
+    const row=chatRows().find(r=>rowId(r)===req.id);
+    if(!row) return {opened:false};
+    const before=location.href,link=row.matches('a[href]')?row:row.querySelector('a[href]');
+    if(link&&A.thread(link.href)&&A.thread(link.href)===A.thread(before)) return {opened:true,key:A.thread(before)};
+    for(const type of ['mousedown','mouseup'])
+      row.dispatchEvent(new MouseEvent(type,{bubbles:true,cancelable:true,button:0,view:window}));
+    row.click();
+    // Only trust a chat that this click actually opened.
+    for(let i=0;i<40;i++) {
+      await pause(150);
+      const key=A.thread(location.href);
+      if(key&&location.href!==before) return {opened:true,key};
     }
-    return {platform:p,threads:[...found.values()]};
+    return {opened:false};
   }
   function editorValue(ed) {return A.norm('value' in ed?ed.value:ed.innerText);}
   const pause=ms=>new Promise(r=>setTimeout(r,ms));
@@ -305,8 +346,8 @@
   }
   chrome.runtime.onMessage.addListener((req,sender,respond)=>{
     if(sender.id!==chrome.runtime.id||!req?.aiy) return;
-    const methods={cancel:()=>{cancelled.add(req.jobId);return {cancelled:true};},ping:()=>({platform:A.platform(location.href)}),snapshot,discover,
-      openThread:()=>openThread(req),
+    const methods={cancel:()=>{cancelled.add(req.jobId);return {cancelled:true};},ping:()=>({platform:A.platform(location.href)}),snapshot,unread,
+      openThread:()=>openThread(req),openUnread:()=>openUnread(req),
       socialSend:()=>socialSend(req),aiState,aiSubmit:()=>aiSubmit(req)};
     if(!methods[req.type]) return;
     Promise.resolve().then(methods[req.type]).then(data=>respond({ok:true,data}))

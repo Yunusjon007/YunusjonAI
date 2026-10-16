@@ -158,3 +158,24 @@ test('read receipt changing the rows does not block the reply',async()=>{
   const r=await call(p,'socialSend',{signature:s.signature,event:s.event,key:s.key,text:'Hello!',jobId:'j'});
   assert.equal(r.data.status,'sent');await p.close();
 });
+test('chat list reports only rows with unread markers',async()=>{
+  const row=(name,extra,attrs='')=>`<div role="button" ${attrs} style="display:flex;align-items:center;width:340px;height:72px"><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" style="width:56px;height:56px"><div><div>${name}</div><div>Salom</div></div>${extra}</div>`;
+  const dot='<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:rgb(0,149,246)"></span>';
+  const online='<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:rgb(30,200,60)"></span>';
+  const verified='<svg width="12" height="12"><path d="M0 0h12v12H0z" fill="rgb(0,149,246)"/></svg>';
+  const p=await pageWith(row('Yunusjon',dot)+row('Ali',online+verified)+row('Vali',''),'https://www.instagram.com/direct/general/');
+  const {data}=await call(p,'unread');assert.deepEqual(data.map(r=>r.title),['Yunusjon']);await p.close();
+});
+test('Telegram unread badges skip groups and the archive',async()=>{
+  const badge='<span style="display:inline-block;min-width:20px;height:20px;border-radius:10px;background:rgb(10,198,48)">3</span>';
+  const item=(href,name)=>`<a href="${href}" style="display:flex;width:300px;height:60px"><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" style="width:48px;height:48px"><div>${name}</div>${badge}</a>`;
+  const p=await pageWith(`<div id="LeftColumn">${item('#111','Ali')}${item('#-100500','Guruh')}<div role="button" class="chat-item-archive" style="display:flex;width:300px;height:60px"><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" style="width:48px;height:48px"><div>Arxiv</div>${badge}</div></div>`,'https://web.telegram.org/a/');
+  const {data}=await call(p,'unread');
+  assert.deepEqual(data.map(r=>[r.title,r.skip]),[['Ali',false],['Guruh',true],['Arxiv',true]]);await p.close();
+});
+test('opening an unread row waits for the chat it opened',async()=>{
+  const p=await pageWith('<div role="button" id="r" style="display:flex;width:340px;height:72px"><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" style="width:56px;height:56px"><div>Yunusjon</div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:rgb(0,149,246)"></span></div>','https://www.instagram.com/direct/inbox/');
+  await p.evaluate(()=>document.getElementById('r').onclick=()=>setTimeout(()=>history.pushState(null,'','/direct/t/yv/'),300));
+  const {data:[row]}=await call(p,'unread');const r=await call(p,'openUnread',{id:row.id});
+  assert.deepEqual(r.data,{opened:true,key:'instagram:yv'});await p.close();
+});

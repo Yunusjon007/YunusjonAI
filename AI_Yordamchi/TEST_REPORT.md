@@ -1,11 +1,16 @@
 # Validation — 2026-10-16
 
-53 automated checks passed using Node and local Chromium on synthetic fixtures:
+58 automated checks passed using Node and local Chromium on synthetic fixtures:
 
-- 27 engine checks: baselines, duplicate prevention, stale replies, saved send state, uncertain outcomes, cancellation, provider fallback, review mode, Telegram group filtering, answering queued messages before the next network is scanned and retry timing.
-- 19 DOM checks: incoming/outgoing messages, editor scope, drafts, changed conversations, media, AI response completion, multi-line prompts and replies in paragraph-based editors, Enter fallback and read receipts.
+- 28 engine checks: unread chats answered on first sight, baselines, duplicate prevention, stale replies, saved send state, uncertain outcomes, cancellation, provider fallback, review mode, Telegram group filtering, answering queued messages before the next network is scanned and retry timing.
+- 22 DOM checks: unread markers in chat lists (blue dots, counter badges, skipped groups and archive), opening unread rows, incoming/outgoing messages, editor scope, drafts, changed conversations, media, AI response completion, multi-line prompts and replies in paragraph-based editors, Enter fallback and read receipts.
 - 5 dashboard checks: settings, narrow viewport, safe rendering of customer text, protection against simultaneous controllers and background-safe timers.
-- 2 end-to-end checks: the unpacked extension runs in Chromium against look-alike Instagram, Telegram and ChatGPT pages served locally, and answers a new message automatically.
+- 3 end-to-end checks: the unpacked extension runs in Chromium against look-alike Instagram, Telegram and ChatGPT pages served locally. It answers an unread Instagram message in the General folder and an unread Telegram private chat without any chat being opened by hand, leaves read chats and groups alone, and answers a chat queued from the manual check.
+
+## Changes in 1.0.2
+
+- Chats are found from unread markers in each chat list (Instagram Primary and General, Facebook, Telegram) instead of opening every known chat one by one. Only unread chats are opened.
+- An unread message is answered the first time it is seen. Previously a newly found chat was only recorded, so its first message was never answered.
 
 ## Fixes in 1.0.1
 

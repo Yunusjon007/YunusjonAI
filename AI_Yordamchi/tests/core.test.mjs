@@ -153,13 +153,27 @@ test('a queued message is answered before the next network is scanned',async()=>
   const {c,j}=controller();c.settings.mode='review';j.status='pending';c.running=true;c.runToken=3;c.delay=async()=>{};
   c.settings.platforms=['instagram','telegram'];chrome.tabs.query=async()=>[];
   const order=[];c.worker=async platform=>{order.push('worker:'+platform);return 7;};
-  c.rpc=async(id,type)=>type==='discover'?{threads:[]}:snap();
+  c.rpc=async(id,type)=>type==='unread'?[]:snap();
   c.generate=async()=>{order.push('generate');return {text:'Hi',provider:'chatgpt'};};
-  await c.scan(3,false);
+  await c.scan(3);
   assert.ok(order.includes('generate'));assert.ok(order.indexOf('generate')<order.indexOf('worker:telegram'));
 });
 test('page failures before generation retry soon instead of looping',async()=>{
   const {c,j}=controller();j.status='pending';c.running=true;c.runToken=4;
   let calls=0;c.worker=async()=>{calls++;throw Error('Sahifa yuklanmadi.');};
   await c.drain(4);assert.equal(calls,1);assert.equal(j.status,'pending');assert.ok(j.retryAt>Date.now());
+});
+test('an unread chat is answered even when seen for the first time; groups are skipped',async()=>{
+  chromeStub();const c=new Controller();c.state=blank();c.settings={...structuredClone(A.defaults),platforms:['telegram'],mode:'review'};
+  c.running=true;c.runToken=5;c.delay=async()=>{};c.worker=async()=>7;c.generate=async()=>({text:'Javob',provider:'chatgpt'});
+  chrome.tabs.query=async()=>[];chrome.tabs.get=async()=>({url:'https://web.telegram.org/a/'});
+  const fresh={...snap('telegram:/a/:#222','e9','Salom yordam kerak'),platform:'telegram',url:'https://web.telegram.org/a/#222'};
+  let rows=[{id:'group',skip:true},{id:'vali',skip:false}];const opened=[];
+  c.rpc=async(id,type,args)=>{
+    if(type==='unread')return rows;
+    if(type==='openUnread'){opened.push(args.id);rows=rows.filter(r=>r.id!==args.id);return {opened:true,key:fresh.key};}
+    return fresh;
+  };
+  await c.scan(5);
+  assert.deepEqual(opened,['vali']);assert.equal(c.state.jobs.e9.status,'ready');
 });

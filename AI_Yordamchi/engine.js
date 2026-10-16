@@ -46,7 +46,7 @@ export class Controller {
   constructor(onChange=()=>{}) {
     this.delay=sleep;this.onChange=onChange;this.running=false;this.busy=false;this.runToken=0;
     this.workers={};this.cooldown={};this.status={};this.activity='Tayyor';this.timer=null;
-    this.activeSend=null;this.activeAI=null;this.write=Promise.resolve();this.cursor={};
+    this.activeSend=null;this.activeAI=null;this.write=Promise.resolve();
   }
   async init() {
     const saved=await chrome.storage.local.get(['settings','state']);
@@ -120,7 +120,7 @@ export class Controller {
     await chrome.tabs.create({url:source.url,active:true});
   }
   async worker(platform,url,token=null) {
-    // Without a url, any page of the platform will do for discovering chats.
+    // Without a url, any page of the platform will do.
     let id=this.workers[platform];
     if(id) {
       try {
@@ -183,41 +183,62 @@ export class Controller {
     if(!job)throw Error('Bu xabar navbatda yoki unga javob yuborilgan / tekshirish kerak.');
     await this.save();this.log('Xabar navbatga qo‘shildi. Boshlash tugmasini bosing.');
   }
-  async scan(token,baseline) {
+  take(snap,unread=false) {
+    // An unread chat is answered even the first time it is seen; other chats
+    // only after their latest message changes, so old conversations stay quiet.
+    const j=ingest(this.state,snap,unread?{manual:true}:{baseline:!this.state.seen[snap.key]});
+    if(j)this.log(A.sources[snap.platform].name+': yangi xabar navbatga qo‘shildi.');
+    return j;
+  }
+  async listTab(platform,list,token) {
+    // A single chat list stays loaded; Instagram's two lists are separate pages.
+    if(A.sources[platform].lists.length===1&&this.workers[platform]) {
+      const tab=await chrome.tabs.get(this.workers[platform]).catch(()=>null);
+      if(tab&&A.messagesPage(tab.url))return this.worker(platform,null,token);
+    }
+    return this.worker(platform,list,token);
+  }
+  async scan(token) {
     const open=await chrome.tabs.query({});
     for(const platform of this.settings.platforms) {
       this.alive(token);
-      const candidates=new Map();
-      for(const t of open)if(A.platform(t.url)===platform&&A.thread(t.url)&&!Object.values(this.workers).includes(t.id))
-        candidates.set(A.thread(t.url),{url:t.url,title:t.title});
-      for(const [key,t]of Object.entries(this.state.pinned))if(t.platform===platform&&A.thread(t.url))candidates.set(key,t);
-      for(const [key,t]of Object.entries(this.state.seen))if(A.platform(t.url)===platform&&A.thread(t.url))candidates.set(key,t);
       this.activity=A.sources[platform].name+' chatlari tekshirilmoqda…';this.change();
-      try {
-        const id=await this.worker(platform,null,token);
-        const d=await this.rpc(id,'discover');
-        for(const t of d.threads)candidates.set(t.key,t);
-      } catch(e) {this.status[platform]=e.message;this.change();}
-      const list=[...candidates.values()];
-      if(!list.length) {this.status[platform]='Chat topilmadi. Saytga kiring va bitta shaxsiy chatni oching.';this.change();continue;}
-      const start=(this.cursor[platform]||0)%list.length;
-      const batch=Array.from({length:Math.min(list.length,this.settings.maxThreads)},(_,i)=>list[(start+i)%list.length]);
-      this.cursor[platform]=(start+batch.length)%list.length;
-      let read=0;
-      for(const t of batch) {
+      let opened=0,error='';
+      // Chats open in the user's own tabs are read where they are.
+      for(const t of open) {
+        if(A.platform(t.url)!==platform||!A.thread(t.url)||Object.values(this.workers).includes(t.id))continue;
+        try {await this.attach(t.id);this.take(await this.read(t.id,token));} catch {}
         this.alive(token);
-        try {
-          const id=await this.worker(platform,t.url,token),snap=await this.read(id,token);
-          // Verify navigation identity; hash-based chats can load asynchronously.
-          if(snap.key!==A.thread(t.url))throw Error('Chat hali yuklanmagan. Keyingi tekshiruvda qayta ko‘riladi.');
-          const j=ingest(this.state,snap,{baseline:!this.state.seen[snap.key]});read++;
-          if(j)this.log(A.sources[platform].name+': yangi xabar navbatga qo‘shildi.');
-          await this.save();
-        } catch(e) {this.status[platform]=e.message;this.change();}
       }
-      if(read)this.status[platform]=`${read} / ${list.length} ta topilgan chat tekshirildi`;
-      this.change();
-      // Answer what was found before spending minutes on the next network.
+      // Read unread markers from the chat list and open only those chats.
+      for(const list of A.sources[platform].lists) {
+        try {
+          const id=await this.listTab(platform,list,token);
+          // A message in the chat already open may never show as unread.
+          if(A.thread((await chrome.tabs.get(id)).url)) {
+            const current=await this.read(id,token).catch(e=>{this.alive(token);return null;});
+            if(current)this.take(current);
+          }
+          const done=new Set();
+          for(let n=0;n<this.settings.maxThreads;n++) {
+            this.alive(token);
+            const row=(await this.rpc(id,'unread')).find(r=>!r.skip&&!done.has(r.id));
+            if(!row)break;
+            done.add(row.id);
+            const result=await this.rpc(id,'openUnread',{id:row.id});
+            if(!result.opened)continue;
+            let snap;
+            try {snap=await this.read(id,token);} catch(e) {this.alive(token);error=e.message;continue;}
+            if(snap.key===result.key){this.take(snap,true);opened++;}
+          }
+        } catch(e) {
+          if(!this.running||token!==this.runToken)throw e;
+          error=e.message;
+        }
+      }
+      this.status[platform]=error||(opened?`${opened} ta o‘qilmagan chat ochildi`:'Yangi o‘qilmagan xabar yo‘q');
+      await this.save();this.change();
+      // Answer what was found before moving on to the next network.
       await this.drain(token);
     }
   }
@@ -339,10 +360,9 @@ export class Controller {
     if(this.running||this.busy)return;
     this.running=true;const token=++this.runToken;
     this.log('Kuzatish boshlandi. Dastlab mavjud xabarlar boshlang‘ich holat sifatida olinadi.');
-    let baseline=true;
     while(this.running&&token===this.runToken) {
       this.busy=true;this.change();
-      try {await this.drain(token);await this.scan(token,baseline);baseline=false;}
+      try {await this.drain(token);await this.scan(token);}
       catch(e){if(this.running)this.log(e.message,'warn');}
       finally{this.busy=false;this.change();}
       if(!this.running||token!==this.runToken)break;
