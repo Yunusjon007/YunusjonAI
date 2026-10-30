@@ -53,15 +53,18 @@ class App:
         except Exception as exc:
             return [], f"❌ AI model yuklanmadi / модель не загружена / model not loaded:\n\n```\n{exc}\n```", None
         langs = available_languages() if lang == "all" else [lang]
-        result = analyze(
-            paths,
-            backend,
-            patient={"patient_id": patient_id, "patient_name": patient_name, "patient_age": age},
-            findings=[Finding(**f) for f in findings or []],
-            overrides={k: v for k, v in (("R", r_over), ("L", l_over)) if v},
-            indication=indication,
-            comparison=comparison,
-        )
+        try:
+            result = analyze(
+                paths,
+                backend,
+                patient={"patient_id": patient_id, "patient_name": patient_name, "patient_age": age},
+                findings=[Finding(**f) for f in findings or []],
+                overrides={k: v for k, v in (("R", r_over), ("L", l_over)) if v},
+                indication=indication,
+                comparison=comparison,
+            )
+        except Exception as exc:
+            return [], f"❌ Tahlil xatosi / ошибка анализа / analysis error:\n\n```\n{exc}\n```", None
         reports = {lg: render(result, lg) for lg in langs}
         study_id = self.db.save(result, reports, paths)
         text = render_many(result, langs)
