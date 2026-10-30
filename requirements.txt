@@ -6,7 +6,7 @@ pydicom>=2.4
 pylibjpeg[all]          # compressed DICOM (JPEG / JPEG 2000 / RLE)
 torch
 timm
-transformers
+transformers>=4.40,<5   # mammoscreen remote code is not compatible with transformers 5
 albumentations          # needed by the ianpan/mammoscreen model code
 gradio>=4
 telethon                # only for telegram_bot.py
