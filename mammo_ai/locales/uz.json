@@ -1,0 +1,166 @@
+{
+  "lang_name": "O'zbekcha",
+  "title": "MAMMOGRAFIYA XULOSASI",
+  "draft_note": "Dastlabki xulosa sun'iy intellekt (SI) yordamida tayyorlandi. Rentgenolog shifokor tomonidan tekshirilishi va imzolanishi shart.",
+
+  "section_patient": "Bemor va tekshiruv",
+  "patient_id": "Bemor ID",
+  "patient_name": "F.I.Sh.",
+  "age": "Yoshi",
+  "study_date": "Tekshiruv sanasi",
+  "device": "Apparat",
+  "indication": "Ko'rsatma",
+  "indication_default": "Skrining mammografiya",
+
+  "section_technique": "Tekshiruv usuli",
+  "technique_text": "Raqamli mammografiya. Bajarilgan proyeksiyalar: {views}.",
+  "views_unknown": "proyeksiyalar ko'rsatilmagan",
+
+  "section_comparison": "Solishtirish",
+  "comparison_none": "Solishtirish uchun oldingi tekshiruvlar taqdim etilmagan.",
+
+  "section_composition": "Sut bezlari tuzilishi (ACR)",
+  "density": {
+    "A": "A — Sut bezlari deyarli to'liq yog' to'qimasidan iborat.",
+    "B": "B — Fibroglandulyar to'qimaning tarqoq sohalari aniqlanadi.",
+    "C": "C — Sut bezlari geterogen zich, bu kichik hosilalarni yashirishi mumkin.",
+    "D": "D — Sut bezlari o'ta zich, bu mammografiya sezgirligini pasaytiradi."
+  },
+  "density_unknown": "Sut bezlari tuzilishini avtomatik baholab bo'lmadi.",
+  "density_confidence": "model ishonchi {pct}%",
+
+  "section_findings": "Tavsif",
+  "side": {"R": "O'ng sut bezi", "L": "Chap sut bezi"},
+  "side_short": {"R": "O'ngda", "L": "Chapda"},
+  "ai_score": "SI bo'yicha xavfli o'sma ehtimoli bahosi: {score}% (shubha darajasi: {level}).",
+  "level": {
+    "low": "past",
+    "low_intermediate": "past-o'rtacha",
+    "intermediate": "o'rtacha",
+    "high": "yuqori"
+  },
+  "ai_birads_model": "BI-RADS klassifikatori natijasi: {probs}.",
+  "ai_no_suspicious": "SI tahlilida xavfli o'smaga shubhali belgilar aniqlanmadi. Model shubhali hosilalar, shubhali kalsinatlar yoki arxitektonika buzilishini ko'rsatmaydi.",
+  "ai_suspicious": "SI tahlilida xavfli o'smaga shubhali bo'lishi mumkin bo'lgan belgilar aniqlandi. Ushbu sut bezini rentgenolog shifokor maqsadli ko'rib chiqishi zarur.",
+  "ai_indeterminate": "SI tahlili natijasi o'rtacha; ushbu sut bezini sinchiklab ko'rib chiqish tavsiya etiladi.",
+  "laterality_estimated": "Izoh: tomon tasvir bo'yicha avtomatik aniqlandi, tekshirib ko'rish kerak.",
+  "not_examined": "Ushbu sut bezining tasvirlari taqdim etilmagan.",
+  "radiologist_findings": "Rentgenolog tomonidan tavsiflangan o'zgarishlar:",
+  "findings_need_category": "Tavsiflangan o'zgarishlarda shubhali belgilar bor, lekin taklif qilingan kategoriya 4 dan past. Yakuniy BI-RADS kategoriyasini rentgenolog shifokor belgilashi shart.",
+
+  "section_impression": "Xulosa (BI-RADS kategoriyasi)",
+  "overall": "Umumiy baho",
+  "risk": "xavfli o'sma ehtimoli {risk}",
+  "birads": {
+    "0": "Baholash yakunlanmagan — qo'shimcha tekshiruv va/yoki oldingi mammogrammalar bilan solishtirish zarur",
+    "1": "Norma (patologik o'zgarishlar aniqlanmadi)",
+    "2": "Xavfsiz (benign) o'zgarishlar",
+    "3": "Ehtimol xavfsiz (benign) o'zgarishlar",
+    "4": "Xavfli o'smaga shubha",
+    "4A": "Xavfli o'smaga past darajadagi shubha",
+    "4B": "Xavfli o'smaga o'rtacha darajadagi shubha",
+    "4C": "Xavfli o'smaga yuqori darajadagi shubha",
+    "5": "Xavfli o'sma ehtimoli juda yuqori",
+    "6": "Biopsiya bilan tasdiqlangan xavfli o'sma"
+  },
+
+  "section_recommendation": "Tavsiyalar",
+  "rec": {
+    "0": "Qo'shimcha tekshiruv: prisel (lokal kompression) / kattalashtirilgan mammografiya va/yoki sut bezlari UTT; mavjud bo'lsa, oldingi mammogrammalar bilan solishtirish.",
+    "1": "Yosh va milliy tavsiyalarga muvofiq muntazam skrining mammografiya.",
+    "2": "Yosh va milliy tavsiyalarga muvofiq muntazam skrining mammografiya.",
+    "3": "Dinamik kuzatuv: 6 oydan so'ng zararlangan sut bezining diagnostik mammografiyasi (keyin 6 va 12 oydan so'ng, jami 2 yil barqarorlik).",
+    "4": "Morfologik tasdiqlash: vizual nazorat ostida trepan (core) biopsiya. Mammolog / onkolog konsultatsiyasi.",
+    "4A": "Morfologik tasdiqlash: vizual nazorat ostida trepan (core) biopsiya. Mammolog / onkolog konsultatsiyasi.",
+    "4B": "Morfologik tasdiqlash: vizual nazorat ostida trepan (core) biopsiya. Mammolog / onkolog konsultatsiyasi.",
+    "4C": "Morfologik tasdiqlash: vizual nazorat ostida trepan (core) biopsiya. Mammolog / onkolog konsultatsiyasi.",
+    "5": "Morfologik tasdiqlash: imkon qadar tezroq vizual nazorat ostida trepan (core) biopsiya. Onkolog konsultatsiyasi.",
+    "6": "Klinik ko'rsatmalarga ko'ra jarrohlik / maxsus davolash. Onkolog nazoratida olib borish."
+  },
+  "dense_note": "Sut bezlari zich bo'lgani sababli ({density} kategoriya) qo'shimcha UTT yoki MRT tekshiruvini ko'rib chiqish mumkin.",
+
+  "section_ai": "Texnik ma'lumot",
+  "models_used": "Qo'llanilgan SI modellari: {models}.",
+  "threshold_note": "BI-RADS kategoriyasi SI bahosi asosida avtomatik taklif qilindi. Chegara qiymatlari klinik jihatdan tasdiqlanmagan va mahalliy ma'lumotlarda kalibrlanishi kerak.",
+  "override_note": "BI-RADS kategoriyasi rentgenolog shifokor tomonidan belgilandi.",
+  "disclaimer": "MUHIM: Ushbu dastur sertifikatlangan tibbiy buyum emas. Xulosa faqat qaror qabul qilishga yordam beruvchi qoralama hisoblanadi. Yakuniy tashxis va BI-RADS kategoriyasini rentgenolog shifokor belgilaydi.",
+  "signature": "Rentgenolog shifokor: ______________________     Sana: ______________",
+
+  "finding_type": {
+    "mass": "Hajmli hosila",
+    "calcifications": "Kalsinatlar",
+    "asymmetry": "Asimmetriya",
+    "distortion": "Arxitektonika buzilishi",
+    "lymph_node": "Intramammar limfa tugun",
+    "skin_lesion": "Teri hosilasi",
+    "dilated_duct": "Yakka kengaygan sut yo'li"
+  },
+  "field": {
+    "shape": "shakli",
+    "margin": "chegarasi",
+    "density": "zichligi",
+    "morphology": "morfologiyasi",
+    "distribution": "joylashuv turi",
+    "asym_type": "turi",
+    "location": "joylashuvi",
+    "clock": "soat bo'yicha",
+    "depth": "chuqurligi",
+    "size": "o'lchami",
+    "assoc": "qo'shimcha belgilar",
+    "note": "izoh"
+  },
+  "size_mm": "{size} mm",
+  "clock_fmt": "soat {clock} da",
+  "shape": {"oval": "oval", "round": "dumaloq", "irregular": "noto'g'ri"},
+  "margin": {
+    "circumscribed": "aniq (chegaralangan)",
+    "obscured": "qisman yashiringan",
+    "microlobulated": "mayda bo'lakchali",
+    "indistinct": "noaniq",
+    "spiculated": "spikulali (nursimon)"
+  },
+  "mass_density": {
+    "high": "yuqori",
+    "equal": "atrof to'qimaga teng",
+    "low": "past",
+    "fat": "yog' saqlovchi"
+  },
+  "morphology": {
+    "benign": "odatda xavfsiz (benign)",
+    "amorphous": "amorf",
+    "coarse_heterogeneous": "dag'al geterogen",
+    "fine_pleomorphic": "mayda pleomorf",
+    "fine_linear": "ingichka chiziqli / chiziqli-tarmoqlanuvchi"
+  },
+  "distribution": {
+    "diffuse": "diffuz",
+    "regional": "regional (mintaqaviy)",
+    "grouped": "guruhlangan",
+    "linear": "chiziqli",
+    "segmental": "segmentar"
+  },
+  "asym_type": {
+    "asymmetry": "asimmetriya",
+    "global": "global asimmetriya",
+    "focal": "fokal asimmetriya",
+    "developing": "rivojlanayotgan asimmetriya"
+  },
+  "location": {
+    "uoq": "yuqori-tashqi kvadrant",
+    "uiq": "yuqori-ichki kvadrant",
+    "loq": "pastki-tashqi kvadrant",
+    "liq": "pastki-ichki kvadrant",
+    "central": "markaziy qism",
+    "subareolar": "areola osti sohasi",
+    "axillary_tail": "aksillyar o'simta (qo'ltiq osti qismi)"
+  },
+  "depth": {"anterior": "oldingi uchdan bir", "middle": "o'rta uchdan bir", "posterior": "orqa uchdan bir"},
+  "assoc": {
+    "skin_retraction": "terining tortilishi",
+    "nipple_retraction": "so'rg'ichning tortilishi",
+    "skin_thickening": "terining qalinlashuvi",
+    "trabecular_thickening": "trabekulalarning qalinlashuvi",
+    "axillary_adenopathy": "qo'ltiq osti limfadenopatiyasi",
+    "calcifications": "qo'shimcha kalsinatlar"
+  }
+}

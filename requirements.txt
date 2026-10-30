@@ -1,0 +1,12 @@
+# MammoAI
+numpy
+pillow
+opencv-python-headless
+pydicom>=2.4
+pylibjpeg[all]          # compressed DICOM (JPEG / JPEG 2000 / RLE)
+torch
+timm
+transformers
+gradio>=4
+telethon                # only for telegram_bot.py
+pytest

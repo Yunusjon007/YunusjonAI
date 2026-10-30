@@ -1,0 +1,166 @@
+{
+  "lang_name": "English",
+  "title": "MAMMOGRAPHY REPORT",
+  "draft_note": "Preliminary report prepared with AI assistance. It requires review and signature by a radiologist.",
+
+  "section_patient": "Patient and study",
+  "patient_id": "Patient ID",
+  "patient_name": "Name",
+  "age": "Age",
+  "study_date": "Study date",
+  "device": "Equipment",
+  "indication": "Indication",
+  "indication_default": "Screening mammography",
+
+  "section_technique": "Technique",
+  "technique_text": "Full-field digital mammography. Views obtained: {views}.",
+  "views_unknown": "views not specified",
+
+  "section_comparison": "Comparison",
+  "comparison_none": "No prior examinations available for comparison.",
+
+  "section_composition": "Breast composition (ACR)",
+  "density": {
+    "A": "A — The breasts are almost entirely fatty.",
+    "B": "B — There are scattered areas of fibroglandular density.",
+    "C": "C — The breasts are heterogeneously dense, which may obscure small masses.",
+    "D": "D — The breasts are extremely dense, which lowers the sensitivity of mammography."
+  },
+  "density_unknown": "Breast composition could not be assessed automatically.",
+  "density_confidence": "model confidence {pct}%",
+
+  "section_findings": "Findings",
+  "side": {"R": "Right breast", "L": "Left breast"},
+  "side_short": {"R": "Right", "L": "Left"},
+  "ai_score": "AI malignancy score: {score}% (suspicion level: {level}).",
+  "level": {
+    "low": "low",
+    "low_intermediate": "low-intermediate",
+    "intermediate": "intermediate",
+    "high": "high"
+  },
+  "ai_birads_model": "BI-RADS classifier output: {probs}.",
+  "ai_no_suspicious": "The AI analysis did not identify features suspicious for malignancy. No suspicious masses, suspicious calcifications or architectural distortion are suggested by the model.",
+  "ai_suspicious": "The AI analysis identified features that may be suspicious for malignancy. Targeted review of this breast by a radiologist is required.",
+  "ai_indeterminate": "The AI analysis gives an intermediate result; careful review of this breast is recommended.",
+  "laterality_estimated": "Note: breast side was determined automatically from the image and should be verified.",
+  "not_examined": "No images of this breast were provided.",
+  "radiologist_findings": "Findings described by the radiologist:",
+  "findings_need_category": "The described findings have suspicious features, but the suggested category is lower than 4. The radiologist must set the final BI-RADS category.",
+
+  "section_impression": "Conclusion (BI-RADS assessment)",
+  "overall": "Overall assessment",
+  "risk": "likelihood of malignancy {risk}",
+  "birads": {
+    "0": "Incomplete — additional imaging evaluation and/or prior mammograms are needed for comparison",
+    "1": "Negative",
+    "2": "Benign",
+    "3": "Probably benign",
+    "4": "Suspicious",
+    "4A": "Low suspicion for malignancy",
+    "4B": "Moderate suspicion for malignancy",
+    "4C": "High suspicion for malignancy",
+    "5": "Highly suggestive of malignancy",
+    "6": "Known biopsy-proven malignancy"
+  },
+
+  "section_recommendation": "Recommendations",
+  "rec": {
+    "0": "Additional imaging: spot-compression / magnification views and/or breast ultrasound; compare with prior mammograms if available.",
+    "1": "Routine screening mammography according to age and national guidelines.",
+    "2": "Routine screening mammography according to age and national guidelines.",
+    "3": "Short-interval follow-up: diagnostic mammography of the affected breast in 6 months (then 6 and 12 months, total 2 years of stability).",
+    "4": "Tissue diagnosis: image-guided core needle biopsy. Consultation with a breast surgeon / oncologist.",
+    "4A": "Tissue diagnosis: image-guided core needle biopsy. Consultation with a breast surgeon / oncologist.",
+    "4B": "Tissue diagnosis: image-guided core needle biopsy. Consultation with a breast surgeon / oncologist.",
+    "4C": "Tissue diagnosis: image-guided core needle biopsy. Consultation with a breast surgeon / oncologist.",
+    "5": "Tissue diagnosis: image-guided core needle biopsy as soon as possible. Consultation with an oncologist.",
+    "6": "Surgical excision / treatment when clinically appropriate. Management by an oncologist."
+  },
+  "dense_note": "Because of dense breast tissue (category {density}), supplemental breast ultrasound or MRI may be considered.",
+
+  "section_ai": "Technical information",
+  "models_used": "AI models used: {models}.",
+  "threshold_note": "BI-RADS category was suggested automatically from the AI malignancy score. Score thresholds are not clinically validated and must be calibrated locally.",
+  "override_note": "BI-RADS category set by the radiologist.",
+  "disclaimer": "IMPORTANT: This software is not a certified medical device. The report is a draft for decision support only. The final diagnosis and BI-RADS assessment are the responsibility of the radiologist.",
+  "signature": "Radiologist: ______________________     Date: ______________",
+
+  "finding_type": {
+    "mass": "Mass",
+    "calcifications": "Calcifications",
+    "asymmetry": "Asymmetry",
+    "distortion": "Architectural distortion",
+    "lymph_node": "Intramammary lymph node",
+    "skin_lesion": "Skin lesion",
+    "dilated_duct": "Solitary dilated duct"
+  },
+  "field": {
+    "shape": "shape",
+    "margin": "margin",
+    "density": "density",
+    "morphology": "morphology",
+    "distribution": "distribution",
+    "asym_type": "type",
+    "location": "location",
+    "clock": "clock position",
+    "depth": "depth",
+    "size": "size",
+    "assoc": "associated features",
+    "note": "note"
+  },
+  "size_mm": "{size} mm",
+  "clock_fmt": "{clock} o'clock",
+  "shape": {"oval": "oval", "round": "round", "irregular": "irregular"},
+  "margin": {
+    "circumscribed": "circumscribed",
+    "obscured": "obscured",
+    "microlobulated": "microlobulated",
+    "indistinct": "indistinct",
+    "spiculated": "spiculated"
+  },
+  "mass_density": {
+    "high": "high density",
+    "equal": "equal density",
+    "low": "low density",
+    "fat": "fat-containing"
+  },
+  "morphology": {
+    "benign": "typically benign",
+    "amorphous": "amorphous",
+    "coarse_heterogeneous": "coarse heterogeneous",
+    "fine_pleomorphic": "fine pleomorphic",
+    "fine_linear": "fine linear or fine-linear branching"
+  },
+  "distribution": {
+    "diffuse": "diffuse",
+    "regional": "regional",
+    "grouped": "grouped",
+    "linear": "linear",
+    "segmental": "segmental"
+  },
+  "asym_type": {
+    "asymmetry": "asymmetry",
+    "global": "global asymmetry",
+    "focal": "focal asymmetry",
+    "developing": "developing asymmetry"
+  },
+  "location": {
+    "uoq": "upper outer quadrant",
+    "uiq": "upper inner quadrant",
+    "loq": "lower outer quadrant",
+    "liq": "lower inner quadrant",
+    "central": "central region",
+    "subareolar": "subareolar region",
+    "axillary_tail": "axillary tail"
+  },
+  "depth": {"anterior": "anterior third", "middle": "middle third", "posterior": "posterior third"},
+  "assoc": {
+    "skin_retraction": "skin retraction",
+    "nipple_retraction": "nipple retraction",
+    "skin_thickening": "skin thickening",
+    "trabecular_thickening": "trabecular thickening",
+    "axillary_adenopathy": "axillary adenopathy",
+    "calcifications": "associated calcifications"
+  }
+}
