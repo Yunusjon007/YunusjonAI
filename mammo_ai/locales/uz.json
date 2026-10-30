@@ -53,6 +53,8 @@
   "ai_finding_size": ", o'lchami ≈ {size} mm",
   "benign_mass_note": "Xavfli o'sma bahosi past bo'lgani holda hosila aniqlandi — ehtimol xavfsiz (masalan, fibroadenoma, kista). Agar u avvaldan ma'lum va barqaror bo'lsa, shifokor BI-RADS 2 ni, skriningda esa BI-RADS 0 (qo'shimcha tekshiruv) ni belgilashi mumkin.",
   "detector_missing": "Hosila detektori o'rnatilmagan: model faqat xavfli o'sma ehtimolini baholaydi va xavfsiz hosilalarni (fibroadenoma, kista) ANIQLAMAYDI. 1, 2 yoki 3 kategoriyani rentgenolog shifokor tasdiqlashi shart.",
+  "detector_unvalidated": "Hosila detektori tasdiqlanmagan (aniqligi o'lchanmagan yoki past). U hech narsa topmagani hosila yo'q degani EMAS — 1, 2 yoki 3 kategoriyani rentgenolog shifokor tasdiqlashi shart.",
+  "detector_metrics": "Hosila detektori validatsiya to'plamida: sezgirlik (recall) {recall}%, mAP50 {map50}% ({data}). Hosilalarni o'tkazib yuborishi mumkin.",
   "split_note": "Ikkala sut bezi bitta tasvirda edi; tasvir o'rtadan avtomatik bo'lindi (chap yarmi — o'ng bez, o'ng yarmi — chap bez). Tekshirib ko'ring.",
   "section_impression": "Xulosa (BI-RADS kategoriyasi)",
   "overall": "Umumiy baho",

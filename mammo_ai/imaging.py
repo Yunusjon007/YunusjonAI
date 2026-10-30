@@ -33,7 +33,9 @@ def _to_uint8(arr: np.ndarray) -> np.ndarray:
     arr = arr.astype(np.float32)
     lo, hi = np.percentile(arr, 0.5), np.percentile(arr, 99.5)
     if hi <= lo:
-        lo, hi = float(arr.min()), float(arr.max() or 1)
+        lo, hi = float(arr.min()), float(arr.max())
+    if hi <= lo:  # uniform image
+        return np.zeros(arr.shape, np.uint8)
     arr = np.clip((arr - lo) / (hi - lo), 0, 1)
     return (arr * 255).astype(np.uint8)
 

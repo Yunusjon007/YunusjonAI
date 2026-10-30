@@ -29,6 +29,8 @@ class Settings:
     # Lesion detector (YOLO). Draws circles around findings; without it benign lesions are not detected.
     detector_weights: str = os.getenv("MAMMO_DETECTOR_WEIGHTS", str(ROOT / "weights" / "detector.pt"))
     detector_conf: float = float(os.getenv("MAMMO_DETECTOR_CONF", "0.25"))
+    # Below this validation recall (or without validation data) the report never trusts "nothing found".
+    detector_min_recall: float = float(os.getenv("MAMMO_DETECTOR_MIN_RECALL", "0.8"))
 
     # Upper bounds of the AI malignancy score for each BI-RADS category:
     # score < t[0] -> 1, < t[1] -> 3, < t[2] -> 4A, < t[3] -> 4B, < t[4] -> 4C, else 5.

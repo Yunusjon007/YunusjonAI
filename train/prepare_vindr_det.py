@@ -20,9 +20,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from mammo_ai.imaging import crop_box, load_image  # noqa: E402
+from mammo_ai.imaging import load_image  # noqa: E402
+from yolo_common import write_example, write_yaml  # noqa: E402
 
-CLASSES = ["mass", "calcification", "asymmetry", "distortion"]
 CATEGORY_TO_CLASS = {
     "Mass": 0,
     "Suspicious Calcification": 1,
@@ -49,8 +49,6 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
-    import cv2
-
     root, out = Path(args.root), Path(args.out)
     images: dict[str, dict] = {}
     boxes: dict[str, list] = defaultdict(list)
@@ -70,39 +68,12 @@ def main() -> None:
     for n, image_id in enumerate(selected):
         r = images[image_id]
         split = "val" if r["split"] == "test" else "train"
-        png = out / "images" / split / f"{image_id}.png"
-        txt = out / "labels" / split / f"{image_id}.txt"
-        png.parent.mkdir(parents=True, exist_ok=True)
-        txt.parent.mkdir(parents=True, exist_ok=True)
-
         px = load_image(root / "images" / r["study_id"] / f"{image_id}.dicom").pixels
-        x0, y0, x1, y1 = crop_box(px)
-        crop = px[y0:y1, x0:x1]
-        scale = args.size / max(crop.shape)
-        w, h = max(1, round(crop.shape[1] * scale)), max(1, round(crop.shape[0] * scale))
-        cv2.imwrite(str(png), cv2.resize(crop, (w, h), interpolation=cv2.INTER_AREA))
-
-        lines = []
-        for c, bx0, by0, bx1, by1 in boxes[image_id]:
-            # into crop coordinates, clipped, then normalised
-            bx0, bx1 = max(bx0 - x0, 0), min(bx1 - x0, crop.shape[1])
-            by0, by1 = max(by0 - y0, 0), min(by1 - y0, crop.shape[0])
-            if bx1 <= bx0 or by1 <= by0:
-                continue
-            cw, ch = crop.shape[1], crop.shape[0]
-            lines.append(
-                f"{c} {(bx0 + bx1) / 2 / cw:.6f} {(by0 + by1) / 2 / ch:.6f} {(bx1 - bx0) / cw:.6f} {(by1 - by0) / ch:.6f}"
-            )
-        txt.write_text("\n".join(lines) + ("\n" if lines else ""))
+        write_example(px, boxes[image_id], out, split, image_id, args.size)
         if n % 200 == 0:
             print(f"{n}/{len(selected)}")
 
-    yaml = out / "data.yaml"
-    yaml.write_text(
-        f"path: {out.resolve()}\ntrain: images/train\nval: images/val\nnames:\n"
-        + "".join(f"  {i}: {name}\n" for i, name in enumerate(CLASSES))
-    )
-    print(f"done -> {yaml}")
+    print(f"done -> {write_yaml(out)}")
 
 
 if __name__ == "__main__":

@@ -1,8 +1,9 @@
 """Download a ready-made open mass detector into weights/detector.pt.
 
 Source: https://github.com/Pragata8910/breast_mass_detection (MIT license, YOLOv8 trained on CBIS-DDSM
-scanned-film mammograms). Its accuracy is not published — use it only until your own detector
-(train/train_detector.py on VinDr-Mammo) is ready.
+scanned-film mammograms). NOT RECOMMENDED: its accuracy is not published and in testing it missed an
+obvious fibroadenoma. Train your own instead (README: "O'z detektoringizni o'qitish"). Because it has
+no validation data, the app keeps warning that "nothing found" does not mean "no lesion".
 
 Security note: a .pt file is a Python pickle and can run code when loaded. Only use checkpoints
 from sources you trust.

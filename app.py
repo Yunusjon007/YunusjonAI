@@ -53,7 +53,9 @@ class App:
             self._backend = load_backends(settings)
         return self._backend
 
-    def run(self, files, lang, split, patient_id, patient_name, age, indication, comparison, r_over, l_over, findings):
+    def run(
+        self, files, lang, split, conf, patient_id, patient_name, age, indication, comparison, r_over, l_over, findings
+    ):
         if not files:
             return [], "⚠️ Rasm yuklang / Загрузите снимки / Upload images", None
         paths = [f if isinstance(f, str) else f.name for f in files]
@@ -61,6 +63,8 @@ class App:
             backend = self.backend
         except Exception as exc:
             return [], f"❌ AI model yuklanmadi / модель не загружена / model not loaded:\n\n```\n{exc}\n```", None
+        if self.detector is not None and conf:
+            self.detector.conf = float(conf)  # lower = more sensitive, more false circles
         langs = available_languages() if lang == "all" else [lang]
         try:
             result = analyze(
@@ -83,9 +87,12 @@ class App:
         with open(out, "w", encoding="utf-8") as f:
             f.write(text)
         gallery = [(px, label) for px, label in result.thumbnails]
-        status = "🎯 detektor: yoqilgan / включён / on" if result.detector_used else (
-            "⚠️ detektor o'rnatilmagan / не установлен / not installed — `python scripts/download_detector.py`"
-        )
+        if not result.detector_used:
+            status = "⚠️ detektor o'rnatilmagan / не установлен / not installed — README: train/train_detector.py"
+        elif not result.detector_validated:
+            status = "⚠️ detektor tasdiqlanmagan / не валидирован / not validated"
+        else:
+            status = f"🎯 detektor: recall {result.detector_metrics['recall'] * 100:.0f}%"
         return gallery, f"`#{study_id}` · {status}\n\n" + text, out
 
     def history(self):
@@ -144,6 +151,11 @@ def build(app: App) -> gr.Blocks:
                         value="auto",
                         label="Bitta rasmda ikkala bez / Обе железы на одном снимке / Both breasts in one image",
                     )
+                    conf = gr.Slider(
+                        0.05, 0.5, value=settings.detector_conf, step=0.05,
+                        label="Detektor chegarasi / Порог детектора / Detector threshold "
+                        "(past = sezgirroq / ниже = чувствительнее / lower = more sensitive)",
+                    )
                     with gr.Accordion("Bemor / Пациент / Patient", open=False):
                         patient_id = gr.Textbox(label="ID")
                         patient_name = gr.Textbox(label="F.I.Sh. / ФИО / Name")
@@ -198,7 +210,7 @@ def build(app: App) -> gr.Blocks:
         clear_btn.click(lambda: ([], []), None, [findings, table])
         run_btn.click(
             app.run,
-            [files, lang, split, patient_id, patient_name, age, indication, comparison, r_over, l_over, findings],
+            [files, lang, split, conf, patient_id, patient_name, age, indication, comparison, r_over, l_over, findings],
             [gallery, report, download],
         )
         refresh.click(app.history, None, hist)

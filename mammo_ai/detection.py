@@ -5,6 +5,7 @@ Any Ultralytics YOLO checkpoint works: the ready-made CBIS-DDSM mass detector
 """
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 
@@ -42,6 +43,24 @@ def finding_type(raw: str) -> str:
     return "ai_lesion"
 
 
+def metrics_path(weights: str) -> str:
+    """Validation results written by train/train_detector.py / evaluate_detector.py next to the weights."""
+    return os.path.splitext(weights)[0] + ".json"
+
+
+def read_metrics(weights: str) -> dict | None:
+    try:
+        with open(metrics_path(weights), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def is_validated(metrics: dict | None, min_recall: float) -> bool:
+    """Only a detector with measured, sufficient sensitivity may turn "nothing found" into BI-RADS 1."""
+    return bool(metrics) and float(metrics.get("recall", 0)) >= min_recall
+
+
 class YoloDetector:
     name = "yolo-detector"
 
@@ -52,6 +71,7 @@ class YoloDetector:
         self.conf = conf
         self.max_det = max_det  # most confident boxes per image
         self.device = _device(device)
+        self.metrics = read_metrics(weights)  # None for downloaded checkpoints without validation data
 
     def detect(self, pixels: np.ndarray) -> list[Detection]:
         rgb = np.repeat(pixels[..., None], 3, axis=2)

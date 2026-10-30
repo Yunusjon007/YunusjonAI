@@ -29,19 +29,58 @@ detektor kerak. U topgan har bir hosila rasmda **qizil aylana** bilan belgilanad
 **hech qachon BI-RADS 1** berilmaydi: rak bahosi past bo'lsa **3** chiqadi va izohda 2 yoki 0 ni tanlash
 mumkinligi yoziladi.
 
-1. Vaqtinchalik tayyor detektor (CBIS-DDSM, sifati e'lon qilinmagan):
-   ```bash
-   python scripts/download_detector.py
-   ```
-2. O'z detektoringiz (tavsiya etiladi). VinDr-Mammo ni physionet.org dan oling, MacBook'da o'qitiladi:
-   ```bash
-   python train/prepare_vindr_det.py --root /data/vindr-mammo --out data/vindr_det
-   ```
-   ```bash
-   caffeinate -i python train/train_detector.py --data data/vindr_det/data.yaml --fraction 0.1 --epochs 3
-   ```
-   Bu qisqa sinov. U ishlasa, `--fraction` va `--epochs` ni olib tashlab to'liq o'qiting. Apple M-chip'da
-   1–3 kun ketadi. Natija `weights/detector.pt` ga saqlanadi va dastur uni o'zi topadi.
+Detektorning aniqligi o'lchanmagan bo'lsa yoki past bo'lsa (sezgirlik < 80%), u hech narsa topmasa ham
+xulosada **ogohlantirish** chiqadi: "topmagani hosila yo'q degani emas". Tayyor detektor
+(`scripts/download_detector.py`) sinovda fibroadenomani **topmadi** — uni ishlatish tavsiya etilmaydi.
+
+#### O'z detektoringizni o'qitish (MacBook) — qadam-baqadam
+Har bir buyruq `yunusjonai` papkasida, `(venv)` yoqilgan holda bajariladi.
+
+**1. CBIS-DDSM ni yuklab oling** (ochiq, ro'yxatdan o'tish shart emas, ~6 GB):
+<https://www.kaggle.com/datasets/awsaf49/cbis-ddsm-breast-cancer-image-dataset> → **Download**.
+Zip'ni oching, masalan `~/Downloads/cbis-ddsm` papkasiga (ichida `csv/` va `jpeg/` bo'ladi).
+
+**2. Papka tuzilishini tekshiring:**
+```bash
+python train/inspect_dataset.py --root ~/Downloads/cbis-ddsm
+```
+
+**3. O'qitish uchun tayyorlang** (30–60 daqiqa):
+```bash
+python train/prepare_cbis_det.py --root ~/Downloads/cbis-ddsm --out data/cbis_det
+```
+Oxirida `done -> data/cbis_det/data.yaml` chiqishi kerak. Agar "Too many files were not found" chiqsa,
+2- va 3-qadam chiqishini menga yuboring.
+
+**4. Qisqa sinov** (~30–60 daqiqa, hammasi ishlashini tekshirish uchun):
+```bash
+caffeinate -i python train/train_detector.py --data data/cbis_det/data.yaml --fraction 0.1 --epochs 3
+```
+
+**5. To'liq o'qitish** (MacBook Air'da taxminan 1–2 kun; Mac quvvatga ulangan, qopqog'i ochiq bo'lsin):
+```bash
+caffeinate -i python train/train_detector.py --data data/cbis_det/data.yaml
+```
+To'xtab qolsa, davom ettirish:
+```bash
+caffeinate -i python train/train_detector.py --data data/cbis_det/data.yaml --resume
+```
+
+**6. Natijani tekshirish.** O'qitish oxirida `lesion recall ..%` chiqadi va `weights/detector.json` ga
+yoziladi. 80% va undan yuqori bo'lsa, dastur detektorga ishonadi. O'z rasmlaringizni (fibroadenoma va
+boshqalar) bitta papkaga solib, aylanalarni ko'zingiz bilan tekshiring:
+```bash
+python train/evaluate_detector.py --data data/cbis_det/data.yaml --images ~/Desktop/test_cases
+```
+Aylanali rasmlar `runs/check/` papkasiga saqlanadi.
+
+**7. VinDr-Mammo** (raqamli, 20 000 rasm) ruxsati kelganda, ikkala bazada birga qayta o'qiting:
+```bash
+python train/prepare_vindr_det.py --root /data/vindr-mammo --out data/vindr_det
+```
+```bash
+caffeinate -i python train/train_detector.py --data data/cbis_det/data.yaml --data data/vindr_det/data.yaml
+```
 
 Bitta rasmda ikkala bez bo'lsa (o'quv rasmlari, ekran surati), rasm avtomatik o'rtadan bo'linadi:
 chap yarmi o'ng bez, o'ng yarmi chap bez. Buni "Bitta rasmda ikkala bez" tugmasi bilan boshqarasiz.
@@ -101,9 +140,13 @@ python -m mammo_ai.cli снимок1.dcm снимок2.dcm --lang ru --out за�
 Модель вероятности рака **не выявляет доброкачественные образования** (фиброаденома, киста), поэтому
 нужен детектор: найденные образования обводятся **красным кругом**. Железе с найденным образованием
 **никогда не ставится BI-RADS 1**: при низкой оценке рака ставится **3** с пояснением.
-Временный готовый детектор ставится командой `python scripts/download_detector.py`. Собственный
-детектор на VinDr-Mammo обучается через `train/prepare_vindr_det.py` и `train/train_detector.py`
-(на Mac через MPS).
+Если точность детектора не измерена или низкая (чувствительность < 80%), при «ничего не найдено»
+в заключении остаётся предупреждение. Готовый детектор (`scripts/download_detector.py`) на тесте
+фиброаденому **не нашёл** — не рекомендуется.
+Собственный детектор: CBIS-DDSM (Kaggle, открыто) → `train/prepare_cbis_det.py`, затем
+`train/train_detector.py` (на Mac через MPS), проверка — `train/evaluate_detector.py`. Позже можно
+добавить VinDr-Mammo (`train/prepare_vindr_det.py`, второй `--data`). Пошаговая инструкция —
+в узбекском разделе выше.
 
 ### Добавить язык
 Скопируйте `mammo_ai/locales/en.json` в `<код>.json` и переведите значения.
@@ -125,8 +168,13 @@ python -m mammo_ai.cli снимок1.dcm снимок2.dcm --lang ru --out за�
 ### Lesion detector (circles)
 The malignancy model does not detect benign lesions, so a YOLO detector marks findings with red circles.
 A breast with a detected lesion is never assigned BI-RADS 1 (low score → 3).
-- Temporary ready-made weights: `python scripts/download_detector.py` (CBIS-DDSM, accuracy unpublished).
-- Your own detector: `train/prepare_vindr_det.py` → `train/train_detector.py` (MPS / CUDA / CPU).
+"Nothing found" is trusted only for a detector whose measured lesion recall (`weights/detector.json`,
+written by `train/evaluate_detector.py`) is at least `MAMMO_DETECTOR_MIN_RECALL` (0.8); otherwise the
+conclusion carries a warning.
+- Ready-made weights: `python scripts/download_detector.py` — missed a fibroadenoma in testing, not recommended.
+- Your own detector: `train/prepare_cbis_det.py` (CBIS-DDSM, Kaggle JPEG or TCIA DICOM) and/or
+  `train/prepare_vindr_det.py` → `train/train_detector.py --data ... [--data ...]` (MPS / CUDA / CPU,
+  `--resume`) → `train/evaluate_detector.py --images your_cases/`.
 - Ultralytics is AGPL-3.0.
 
 Images that show both breasts side by side are split automatically (left half = right breast).

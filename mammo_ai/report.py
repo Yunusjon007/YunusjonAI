@@ -71,7 +71,27 @@ def _ai_finding_line(f: Finding, t: dict) -> str:
     )
 
 
-def _breast_section(b: BreastResult, t: dict, detector_used: bool = False) -> list[str]:
+def _detector_warning(result: StudyResult, t: dict) -> str | None:
+    """Why "no lesion found" cannot be trusted, or None when a validated detector was used."""
+    if not result.detector_used:
+        return t["detector_missing"]
+    if not result.detector_validated:
+        return t["detector_unvalidated"]
+    return None
+
+
+def _detector_metrics(result: StudyResult, t: dict) -> str | None:
+    m = result.detector_metrics
+    if not m or "recall" not in m:
+        return None
+    return t["detector_metrics"].format(
+        recall=f"{float(m['recall']) * 100:.0f}",
+        map50=f"{float(m.get('map50', 0)) * 100:.0f}",
+        data=", ".join(m.get("datasets", [])) or "—",
+    )
+
+
+def _breast_section(b: BreastResult, t: dict, warning: str | None = None) -> list[str]:
     lines = [f"**{t['side'][b.side]}**" + (f" ({', '.join(b.views)})" if b.views else "")]
     p = b.prediction
     if p is None:
@@ -95,8 +115,8 @@ def _breast_section(b: BreastResult, t: dict, detector_used: bool = False) -> li
         lines += [f"  - {_ai_finding_line(f, t)}" for f in b.ai_findings]
         if p.cancer_prob is not None and br.from_score(p.cancer_prob, settings.birads_thresholds) == "1":
             lines.append(f"- {t['benign_mass_note']}")
-    elif not detector_used and ai in {"1", "2"}:
-        lines.append(f"- **⚠️ {t['detector_missing']}**")
+    elif warning and ai in {"1", "2"}:
+        lines.append(f"- **⚠️ {warning}**")
     if b.findings:
         lines.append("- " + t["radiologist_findings"])
         lines += [f"  - {_finding_text(f, t)}" for f in b.findings]
@@ -141,9 +161,10 @@ def render(result: StudyResult, lang: str = "uz") -> str:
         out.append(t["density_unknown"])
     out.append("")
 
+    warning = _detector_warning(result, t)
     out.append(f"## {t['section_findings']}")
     for side in ("R", "L"):
-        out += _breast_section(result.breasts[side], t, result.detector_used) + [""]
+        out += _breast_section(result.breasts[side], t, warning) + [""]
 
     out.append(f"## {t['section_impression']}")
     for side in ("R", "L"):
@@ -155,6 +176,8 @@ def render(result: StudyResult, lang: str = "uz") -> str:
             )
     if result.overall:
         out.append(f"- **{t['overall']}: BI-RADS {result.overall}** — {t['birads'][result.overall]}")
+    if warning and result.overall in {"1", "2"} and not any(b.overridden for b in result.breasts.values()):
+        out.append(f"- **⚠️ {warning}**")
     out.append("")
 
     out.append(f"## {t['section_recommendation']}")
@@ -171,8 +194,11 @@ def render(result: StudyResult, lang: str = "uz") -> str:
         out.append(f"- {t['override_note']}")
     else:
         out.append(f"- {t['threshold_note']}")
-    if not result.detector_used:
-        out.append(f"- {t['detector_missing']}")
+    metrics = _detector_metrics(result, t)
+    if metrics:
+        out.append(f"- {metrics}")
+    if warning:
+        out.append(f"- {warning}")
     out += ["", f"**{t['disclaimer']}**", "", t["signature"], ""]
     return "\n".join(out)
 

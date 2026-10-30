@@ -276,3 +276,38 @@ def test_finding_type_mapping_and_draw():
     img = breast_image("L")
     out = draw(img, [Detection(50, 50, 120, 120, "mass", 0.5)])
     assert out.shape == (*img.shape, 3) and (out != np.repeat(img[..., None], 3, 2)).any()
+
+
+def test_unvalidated_detector_that_finds_nothing_is_not_trusted(tmp_path):
+    files = [write_png(tmp_path, "L_CC.png", "L")]
+    det = FakeDetector()  # finds nothing, no validation metrics (like the downloaded checkpoint)
+    res = analyze(files, FakeBackend(cancer=0.02), detector=det)
+    assert res.breasts["L"].birads == "1" and res.detector_used and not res.detector_validated
+    for lang, phrase in (("uz", "tasdiqlanmagan"), ("ru", "не валидирован"), ("en", "not validated")):
+        text = render(res, lang)
+        conclusion = text[text.index("BI-RADS 1") :]
+        assert phrase in conclusion  # warning sits next to the conclusion, not only in the tech section
+
+    det.metrics = {"recall": 0.55, "map50": 0.4, "datasets": ["CBIS-DDSM"]}  # measured, but too weak
+    res = analyze(files, FakeBackend(cancer=0.02), detector=det)
+    assert not res.detector_validated and "not validated" in render(res, "en")
+
+
+def test_validated_detector_shows_metrics_without_warning(tmp_path):
+    det = FakeDetector()
+    det.metrics = {"recall": 0.86, "map50": 0.71, "datasets": ["CBIS-DDSM", "VinDr-Mammo"]}
+    res = analyze([write_png(tmp_path, "R_CC.png", "R")], FakeBackend(cancer=0.02), detector=det)
+    assert res.detector_validated
+    text = render(res, "en")
+    assert "sensitivity (recall) 86%, mAP50 71% (CBIS-DDSM, VinDr-Mammo)" in text
+    assert "not validated" not in text and "not installed" not in text
+
+
+def test_detector_metrics_file_next_to_weights(tmp_path):
+    from mammo_ai.detection import is_validated, metrics_path, read_metrics
+
+    weights = tmp_path / "detector.pt"
+    assert read_metrics(str(weights)) is None
+    Path(metrics_path(str(weights))).write_text('{"recall": 0.9, "map50": 0.7}')
+    m = read_metrics(str(weights))
+    assert m["recall"] == 0.9 and is_validated(m, 0.8) and not is_validated(m, 0.95) and not is_validated(None, 0.8)

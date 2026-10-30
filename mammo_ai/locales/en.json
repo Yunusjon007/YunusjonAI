@@ -53,6 +53,8 @@
   "ai_finding_size": ", size ≈ {size} mm",
   "benign_mass_note": "A lesion was detected while the malignancy score is low — probably benign (e.g. fibroadenoma, cyst). If it is known and stable, the radiologist may assign BI-RADS 2; on a screening exam, BI-RADS 0 (additional imaging).",
   "detector_missing": "The lesion detector is not installed: the model only estimates the probability of malignancy and does NOT detect benign lesions (fibroadenoma, cyst). Category 1, 2 or 3 must be confirmed by the radiologist.",
+  "detector_unvalidated": "The lesion detector is not validated (accuracy unmeasured or too low). That it found nothing does NOT mean there is no lesion — category 1, 2 or 3 must be confirmed by the radiologist.",
+  "detector_metrics": "Lesion detector on the validation set: sensitivity (recall) {recall}%, mAP50 {map50}% ({data}). It can miss lesions.",
   "split_note": "Both breasts were in one image; it was split in the middle automatically (left half — right breast, right half — left breast). Please verify.",
   "section_impression": "Conclusion (BI-RADS assessment)",
   "overall": "Overall assessment",

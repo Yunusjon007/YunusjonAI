@@ -21,7 +21,7 @@ Check each license before clinical or commercial use. None of these models is a 
 | Dataset | Hajmi / Размер / Size | Belgilar / Разметка / Labels | Kirish / Доступ / Access |
 |---|---|---|---|
 | **VinDr-Mammo** | 5,000 exams, 20,000 DICOM | BI-RADS 1–5 per breast, ACR density, lesion boxes | PhysioNet (free, credentialed) https://physionet.org/content/vindr-mammo/ — `train/prepare_vindr.py` |
-| CBIS-DDSM | ~2,600 studies (scanned film), DICOM | BI-RADS assessment, density, ROI masks, pathology | TCIA (public) https://www.cancerimagingarchive.net/collection/cbis-ddsm/ |
+| **CBIS-DDSM** | ~2,600 studies (scanned film), DICOM | BI-RADS assessment, density, ROI masks, pathology | TCIA (public) https://www.cancerimagingarchive.net/collection/cbis-ddsm/ ; JPEG version (~6 GB) https://www.kaggle.com/datasets/awsaf49/cbis-ddsm-breast-cancer-image-dataset — `train/prepare_cbis_det.py` |
 | INbreast | 115 cases, 410 images | BI-RADS, density, detailed contours | on request (Univ. of Porto) |
 | CMMD (Chinese Mammography Database) | 1,775 patients, DICOM | benign / malignant, molecular subtype | TCIA (public) https://www.cancerimagingarchive.net/collection/cmmd/ |
 | RSNA Screening Mammography | ~54,000 images | cancer, BI-RADS (partial), density | Kaggle https://www.kaggle.com/competitions/rsna-breast-cancer-detection |

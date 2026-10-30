@@ -7,7 +7,7 @@ import numpy as np
 
 from . import birads as br
 from .config import Settings, settings as default_settings
-from .detection import Detection, draw
+from .detection import Detection, draw, is_validated
 from .imaging import MammoImage, crop_breast, load_image, split_two_breasts
 from .models import Backend, BreastPrediction
 
@@ -86,6 +86,8 @@ class StudyResult:
     comparison: str = ""
     models: list[str] = field(default_factory=list)
     detector_used: bool = False
+    detector_metrics: dict | None = None  # validation results of the detector (None = never validated)
+    detector_validated: bool = False  # recall >= settings.detector_min_recall
     split: bool = False  # an uploaded image contained both breasts and was split
     thumbnails: list[tuple[np.ndarray, str]] = field(default_factory=list)  # RGB, lesions circled
 
@@ -211,5 +213,9 @@ def analyze(
     thumbs = [(draw(i.pixels, i.detections), i.label) for i in images]
     return StudyResult(
         breasts, overall, density, conf, patient, indication, comparison, sorted(models),
-        detector_used=detector is not None, split=any(i.split_from_pair for i in images), thumbnails=thumbs,
+        detector_used=detector is not None,
+        detector_metrics=getattr(detector, "metrics", None),
+        detector_validated=is_validated(getattr(detector, "metrics", None), cfg.detector_min_recall),
+        split=any(i.split_from_pair for i in images),
+        thumbnails=thumbs,
     )
