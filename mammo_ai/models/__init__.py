@@ -12,11 +12,12 @@ from .base import Backend, BreastPrediction
 class Ensemble(Backend):
     name = "ensemble"
 
-    def __init__(self, backends: list[Backend]):
+    def __init__(self, backends: list[Backend], errors: list[str] | None = None):
         if not backends:
             raise RuntimeError(
                 "No AI model could be loaded. Install requirements (torch, transformers, timm) and make sure "
-                "huggingface.co is reachable, or put a trained checkpoint at MAMMO_BIRADS_CKPT."
+                "huggingface.co is reachable, or put a trained checkpoint at MAMMO_BIRADS_CKPT.\n\nCause:\n"
+                + "\n".join(errors or ["no model configured"])
             )
         self.backends = backends
 
@@ -59,7 +60,7 @@ def load_backends(settings: Settings) -> Ensemble:
             errors.append(f"local_birads: {exc}")
     for e in errors:
         print(f"[models] not loaded -> {e}")
-    return Ensemble(backends)
+    return Ensemble(backends, errors)
 
 
 __all__ = ["Backend", "BreastPrediction", "Ensemble", "load_backends"]
