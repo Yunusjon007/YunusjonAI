@@ -2,7 +2,6 @@
   "lang_name": "English",
   "title": "MAMMOGRAPHY REPORT",
   "draft_note": "Preliminary report prepared with AI assistance. It requires review and signature by a radiologist.",
-
   "section_patient": "Patient and study",
   "patient_id": "Patient ID",
   "patient_name": "Name",
@@ -11,14 +10,11 @@
   "device": "Equipment",
   "indication": "Indication",
   "indication_default": "Screening mammography",
-
   "section_technique": "Technique",
   "technique_text": "Full-field digital mammography. Views obtained: {views}.",
   "views_unknown": "views not specified",
-
   "section_comparison": "Comparison",
   "comparison_none": "No prior examinations available for comparison.",
-
   "section_composition": "Breast composition (ACR)",
   "density": {
     "A": "A — The breasts are almost entirely fatty.",
@@ -28,10 +24,15 @@
   },
   "density_unknown": "Breast composition could not be assessed automatically.",
   "density_confidence": "model confidence {pct}%",
-
   "section_findings": "Findings",
-  "side": {"R": "Right breast", "L": "Left breast"},
-  "side_short": {"R": "Right", "L": "Left"},
+  "side": {
+    "R": "Right breast",
+    "L": "Left breast"
+  },
+  "side_short": {
+    "R": "Right",
+    "L": "Left"
+  },
   "ai_score": "AI malignancy score: {score}% (suspicion level: {level}).",
   "level": {
     "low": "low",
@@ -47,7 +48,12 @@
   "not_examined": "No images of this breast were provided.",
   "radiologist_findings": "Findings described by the radiologist:",
   "findings_need_category": "The described findings have suspicious features, but the suggested category is lower than 4. The radiologist must set the final BI-RADS category.",
-
+  "ai_findings": "Findings marked by the AI on the images (circled in red):",
+  "ai_finding_line": "{type} — confidence {score}%{size}, image {image}",
+  "ai_finding_size": ", size ≈ {size} mm",
+  "benign_mass_note": "A lesion was detected while the malignancy score is low — probably benign (e.g. fibroadenoma, cyst). If it is known and stable, the radiologist may assign BI-RADS 2; on a screening exam, BI-RADS 0 (additional imaging).",
+  "detector_missing": "The lesion detector is not installed: the model only estimates the probability of malignancy and does NOT detect benign lesions (fibroadenoma, cyst). Category 1, 2 or 3 must be confirmed by the radiologist.",
+  "split_note": "Both breasts were in one image; it was split in the middle automatically (left half — right breast, right half — left breast). Please verify.",
   "section_impression": "Conclusion (BI-RADS assessment)",
   "overall": "Overall assessment",
   "risk": "likelihood of malignancy {risk}",
@@ -63,7 +69,6 @@
     "5": "Highly suggestive of malignancy",
     "6": "Known biopsy-proven malignancy"
   },
-
   "section_recommendation": "Recommendations",
   "rec": {
     "0": "Additional imaging: spot-compression / magnification views and/or breast ultrasound; compare with prior mammograms if available.",
@@ -78,14 +83,12 @@
     "6": "Surgical excision / treatment when clinically appropriate. Management by an oncologist."
   },
   "dense_note": "Because of dense breast tissue (category {density}), supplemental breast ultrasound or MRI may be considered.",
-
   "section_ai": "Technical information",
   "models_used": "AI models used: {models}.",
   "threshold_note": "BI-RADS category was suggested automatically from the AI malignancy score. Score thresholds are not clinically validated and must be calibrated locally.",
   "override_note": "BI-RADS category set by the radiologist.",
   "disclaimer": "IMPORTANT: This software is not a certified medical device. The report is a draft for decision support only. The final diagnosis and BI-RADS assessment are the responsibility of the radiologist.",
   "signature": "Radiologist: ______________________     Date: ______________",
-
   "finding_type": {
     "mass": "Mass",
     "calcifications": "Calcifications",
@@ -93,7 +96,8 @@
     "distortion": "Architectural distortion",
     "lymph_node": "Intramammary lymph node",
     "skin_lesion": "Skin lesion",
-    "dilated_duct": "Solitary dilated duct"
+    "dilated_duct": "Solitary dilated duct",
+    "ai_lesion": "Lesion (AI-detected, type not specified)"
   },
   "field": {
     "shape": "shape",
@@ -111,7 +115,11 @@
   },
   "size_mm": "{size} mm",
   "clock_fmt": "{clock} o'clock",
-  "shape": {"oval": "oval", "round": "round", "irregular": "irregular"},
+  "shape": {
+    "oval": "oval",
+    "round": "round",
+    "irregular": "irregular"
+  },
   "margin": {
     "circumscribed": "circumscribed",
     "obscured": "obscured",
@@ -154,7 +162,11 @@
     "subareolar": "subareolar region",
     "axillary_tail": "axillary tail"
   },
-  "depth": {"anterior": "anterior third", "middle": "middle third", "posterior": "posterior third"},
+  "depth": {
+    "anterior": "anterior third",
+    "middle": "middle third",
+    "posterior": "posterior third"
+  },
   "assoc": {
     "skin_retraction": "skin retraction",
     "nipple_retraction": "nipple retraction",

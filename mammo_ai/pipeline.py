@@ -7,7 +7,8 @@ import numpy as np
 
 from . import birads as br
 from .config import Settings, settings as default_settings
-from .imaging import MammoImage, crop_breast, load_image
+from .detection import Detection, draw
+from .imaging import MammoImage, crop_breast, load_image, split_two_breasts
 from .models import Backend, BreastPrediction
 
 SIDES = ("R", "L")
@@ -38,6 +39,9 @@ class Finding:
     size_mm: str = ""
     assoc: list[str] = field(default_factory=list)
     note: str = ""
+    source: str = "radiologist"  # or "ai" (lesion detector)
+    score: float | None = None  # detector confidence for AI findings
+    image: str = ""  # image label the AI finding was marked on
 
     def is_suspicious(self) -> bool:
         if self.type == "distortion":
@@ -64,6 +68,7 @@ class BreastResult:
     overridden: bool = False
     laterality_estimated: bool = False
     findings: list[Finding] = field(default_factory=list)
+    ai_findings: list[Finding] = field(default_factory=list)
 
     @property
     def examined(self) -> bool:
@@ -80,7 +85,22 @@ class StudyResult:
     indication: str = ""
     comparison: str = ""
     models: list[str] = field(default_factory=list)
-    thumbnails: list[tuple[np.ndarray, str]] = field(default_factory=list)
+    detector_used: bool = False
+    split: bool = False  # an uploaded image contained both breasts and was split
+    thumbnails: list[tuple[np.ndarray, str]] = field(default_factory=list)  # RGB, lesions circled
+
+    def save_annotated(self, folder: str) -> list[str]:
+        import os
+
+        import cv2
+
+        os.makedirs(folder, exist_ok=True)
+        paths = []
+        for i, (rgb, label) in enumerate(self.thumbnails):
+            path = os.path.join(folder, f"annotated_{i + 1}_{label.replace('?', 'x')}.png")
+            cv2.imwrite(path, cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
+            paths.append(path)
+        return paths
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -116,6 +136,11 @@ def _combine(preds: list[BreastPrediction]) -> BreastPrediction:
     return out
 
 
+def _ai_finding(side: str, img: MammoImage, d: Detection) -> Finding:
+    size = f"{d.size_px * img.pixel_spacing:.0f}" if img.pixel_spacing else ""
+    return Finding(side=side, type=d.label, size_mm=size, source="ai", score=d.score, image=img.label)
+
+
 def analyze(
     paths: list[str],
     backend: Backend,
@@ -126,14 +151,23 @@ def analyze(
     comparison: str = "",
     side_override: dict[str, str] | None = None,
     cfg: Settings = default_settings,
+    detector=None,
+    split_pairs: bool | None = None,
 ) -> StudyResult:
     """paths: DICOM/PNG/JPG files of one study. overrides: {"R": "4B"} set by the radiologist.
-    side_override: {path: "R"|"L"} when the user knows the side better than the file does."""
-    images = [load_image(p) for p in paths]
-    for img in images:
+    side_override: {path: "R"|"L"} when the user knows the side better than the file does.
+    detector: detection.YoloDetector or None. split_pairs: images with both breasts —
+    True = always split, False = never, None = detect automatically."""
+    images = []
+    for p in paths:
+        img = load_image(p)
         if side_override and side_override.get(img.source) in SIDES:
             img.laterality, img.laterality_estimated = side_override[img.source], False
+        images += split_two_breasts(img, split_pairs)
+    for img in images:
         img.pixels = crop_breast(img.pixels)
+        if detector is not None:
+            img.detections = detector.detect(img.pixels)
 
     patient = dict(patient or {})
     for img in images:  # fill blanks from DICOM tags
@@ -149,10 +183,12 @@ def analyze(
         side_imgs = [i for i in images if i.laterality == side]
         res = BreastResult(side, views=[i.label for i in side_imgs], findings=[f for f in findings if f.side == side])
         res.laterality_estimated = any(i.laterality_estimated for i in side_imgs)
+        res.ai_findings = [_ai_finding(side, i, d) for i in side_imgs for d in i.detections]
         if side_imgs:
             res.prediction = _combine([backend.predict(g) for g in _views_dict(side_imgs)])
             models.update(res.prediction.sources)
-            res.ai_birads = br.assess(res.prediction, cfg.birads_thresholds)
+            lesions = len(res.ai_findings) if detector is not None else None
+            res.ai_birads = br.assess(res.prediction, cfg.birads_thresholds, lesions)
             res.birads = res.ai_birads
             if res.birads == "1" and res.findings and all(f.is_benign() for f in res.findings):
                 res.birads = "2"
@@ -170,5 +206,10 @@ def analyze(
         best = max(dens, key=lambda p: int(np.argmax(p)))
         density, conf = "ABCD"[int(np.argmax(best))], float(max(best))
 
-    thumbs = [(i.pixels, i.label) for i in images]
-    return StudyResult(breasts, overall, density, conf, patient, indication, comparison, sorted(models), thumbs)
+    if detector is not None:
+        models.add(detector.name)
+    thumbs = [(draw(i.pixels, i.detections), i.label) for i in images]
+    return StudyResult(
+        breasts, overall, density, conf, patient, indication, comparison, sorted(models),
+        detector_used=detector is not None, split=any(i.split_from_pair for i in images), thumbnails=thumbs,
+    )

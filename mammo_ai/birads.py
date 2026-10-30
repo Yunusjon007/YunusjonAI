@@ -44,11 +44,16 @@ def suspicion_level(score: float, thresholds: list[float]) -> str:
     return {"1": "low", "3": "low_intermediate"}.get(cat, "high" if cat in {"4C", "5"} else "intermediate")
 
 
-def assess(pred: BreastPrediction, thresholds: list[float]) -> str:
-    """Suggested BI-RADS for one breast. If several models are present, the more severe answer wins."""
+def assess(pred: BreastPrediction, thresholds: list[float], lesions: int | None = None) -> str:
+    """Suggested BI-RADS for one breast. If several models are present, the more severe answer wins.
+    lesions: number of detector findings in this breast, None when no detector is installed.
+    A low malignancy score does not mean "no finding": a detected lesion with a low score
+    (e.g. fibroadenoma) is at least BI-RADS 3, never 1."""
     cats = []
     if pred.cancer_prob is not None:
         cats.append(from_score(pred.cancer_prob, thresholds))
+    if lesions:
+        cats.append("3")
     if pred.birads_probs is not None:
         idx = max(range(len(BIRADS_CLASSES)), key=lambda i: pred.birads_probs[i])
         cat = BIRADS_CLASSES[idx]

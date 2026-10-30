@@ -8,6 +8,7 @@ torch
 timm
 transformers>=4.40,<5   # mammoscreen remote code is not compatible with transformers 5
 albumentations          # needed by the ianpan/mammoscreen model code
+ultralytics             # lesion detector (YOLO), AGPL-3.0
 gradio>=4
 telethon                # only for telegram_bot.py
 pytest

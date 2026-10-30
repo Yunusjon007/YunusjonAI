@@ -23,6 +23,29 @@ to'liq xulosa **o'zbek, rus va ingliz** tillarida. Veb-interfeys, Telegram bot, 
 5. Shifokor topilmalarni (hosila, kalsinat, asimmetriya, joylashuv, o'lcham...) qo'shishi va BI-RADS ni
    qo'lda o'zgartirishi mumkin. Xulosa ACR BI-RADS leksikonida uch tilda chiqadi va bazaga saqlanadi.
 
+### Patologiyani aylana bilan ko'rsatish (lezyon detektori)
+Rak ehtimoli modeli **xavfsiz hosilalarni (fibroadenoma, kista) aniqlamaydi**, shuning uchun alohida
+detektor kerak. U topgan har bir hosila rasmda **qizil aylana** bilan belgilanadi. Hosila topilgan bezga
+**hech qachon BI-RADS 1** berilmaydi: rak bahosi past bo'lsa **3** chiqadi va izohda 2 yoki 0 ni tanlash
+mumkinligi yoziladi.
+
+1. Vaqtinchalik tayyor detektor (CBIS-DDSM, sifati e'lon qilinmagan):
+   ```bash
+   python scripts/download_detector.py
+   ```
+2. O'z detektoringiz (tavsiya etiladi). VinDr-Mammo ni physionet.org dan oling, MacBook'da o'qitiladi:
+   ```bash
+   python train/prepare_vindr_det.py --root /data/vindr-mammo --out data/vindr_det
+   ```
+   ```bash
+   caffeinate -i python train/train_detector.py --data data/vindr_det/data.yaml --fraction 0.1 --epochs 3
+   ```
+   Bu qisqa sinov. U ishlasa, `--fraction` va `--epochs` ni olib tashlab to'liq o'qiting. Apple M-chip'da
+   1–3 kun ketadi. Natija `weights/detector.pt` ga saqlanadi va dastur uni o'zi topadi.
+
+Bitta rasmda ikkala bez bo'lsa (o'quv rasmlari, ekran surati), rasm avtomatik o'rtadan bo'linadi:
+chap yarmi o'ng bez, o'ng yarmi chap bez. Buni "Bitta rasmda ikkala bez" tugmasi bilan boshqarasiz.
+
 ### O'rnatish
 ```bash
 python -m venv venv && source venv/bin/activate     # Windows: venv\Scripts\activate
@@ -74,6 +97,14 @@ python app.py
 python -m mammo_ai.cli снимок1.dcm снимок2.dcm --lang ru --out заключение.md
 ```
 
+### Обводка находок (детектор образований)
+Модель вероятности рака **не выявляет доброкачественные образования** (фиброаденома, киста), поэтому
+нужен детектор: найденные образования обводятся **красным кругом**. Железе с найденным образованием
+**никогда не ставится BI-RADS 1**: при низкой оценке рака ставится **3** с пояснением.
+Временный готовый детектор ставится командой `python scripts/download_detector.py`. Собственный
+детектор на VinDr-Mammo обучается через `train/prepare_vindr_det.py` и `train/train_detector.py`
+(на Mac через MPS).
+
 ### Добавить язык
 Скопируйте `mammo_ai/locales/en.json` в `<код>.json` и переведите значения.
 
@@ -91,8 +122,17 @@ python -m mammo_ai.cli снимок1.dcm снимок2.dcm --lang ru --out за�
    `mammo_ai/locales/*.json` and every study is stored in SQLite (`data/mammo.sqlite3`) with images, reports,
    and later biopsy ground truth (for calibration / retraining; CSV export in the "Database" tab).
 
+### Lesion detector (circles)
+The malignancy model does not detect benign lesions, so a YOLO detector marks findings with red circles.
+A breast with a detected lesion is never assigned BI-RADS 1 (low score → 3).
+- Temporary ready-made weights: `python scripts/download_detector.py` (CBIS-DDSM, accuracy unpublished).
+- Your own detector: `train/prepare_vindr_det.py` → `train/train_detector.py` (MPS / CUDA / CPU).
+- Ultralytics is AGPL-3.0.
+
+Images that show both breasts side by side are split automatically (left half = right breast).
+
 ### Limitations
-- The model gives one score per breast; it does **not** localise lesions. Findings are described by the radiologist.
+- Without a detector the model gives one score per breast and does **not** localise lesions.
 - Trained mostly on screening data from other populations — validate on your own equipment and patients.
 
 ### Settings (environment variables)
@@ -104,6 +144,8 @@ python -m mammo_ai.cli снимок1.dcm снимок2.dcm --lang ru --out за�
 | `MAMMO_LANG` | `uz` |
 | `MAMMO_DEVICE` | `auto` (`cpu` / `cuda`) |
 | `MAMMO_USE_HF_CROP` | `0` |
+| `MAMMO_DETECTOR_WEIGHTS` | `weights/detector.pt` |
+| `MAMMO_DETECTOR_CONF` | `0.25` |
 
 ### Tests
 ```bash
@@ -115,6 +157,7 @@ pytest
 mammo_ai/          imaging, models/, birads, pipeline, report, db, cli, locales/{uz,ru,en}.json
 app.py             Gradio web UI
 telegram_bot.py    Telegram bot
-train/             prepare_vindr.py, train_birads.py, calibrate.py
+train/             prepare_vindr.py, train_birads.py, prepare_vindr_det.py, train_detector.py, calibrate.py
+scripts/           download_detector.py
 docs/              MODELS_AND_DATASETS.md
 ```

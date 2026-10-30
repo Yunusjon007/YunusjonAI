@@ -32,9 +32,18 @@ def _field_label(key: str) -> str:
 
 
 class App:
-    def __init__(self, backend=None, db: Database | None = None):
+    def __init__(self, backend=None, db: Database | None = None, detector="auto"):
         self._backend = backend
+        self._detector = detector  # "auto" = load weights/detector.pt on first use (None if absent)
         self.db = db or Database(settings.db_path)
+
+    @property
+    def detector(self):
+        if self._detector == "auto":
+            from mammo_ai.detection import load_detector
+
+            self._detector = load_detector(settings)
+        return self._detector
 
     @property
     def backend(self):
@@ -44,7 +53,7 @@ class App:
             self._backend = load_backends(settings)
         return self._backend
 
-    def run(self, files, lang, patient_id, patient_name, age, indication, comparison, r_over, l_over, findings):
+    def run(self, files, lang, split, patient_id, patient_name, age, indication, comparison, r_over, l_over, findings):
         if not files:
             return [], "⚠️ Rasm yuklang / Загрузите снимки / Upload images", None
         paths = [f if isinstance(f, str) else f.name for f in files]
@@ -62,6 +71,8 @@ class App:
                 overrides={k: v for k, v in (("R", r_over), ("L", l_over)) if v},
                 indication=indication,
                 comparison=comparison,
+                detector=self.detector,
+                split_pairs={"auto": None, "yes": True, "no": False}[split],
             )
         except Exception as exc:
             return [], f"❌ Tahlil xatosi / ошибка анализа / analysis error:\n\n```\n{exc}\n```", None
@@ -72,7 +83,10 @@ class App:
         with open(out, "w", encoding="utf-8") as f:
             f.write(text)
         gallery = [(px, label) for px, label in result.thumbnails]
-        return gallery, f"`#{study_id}`\n\n" + text, out
+        status = "🎯 detektor: yoqilgan / включён / on" if result.detector_used else (
+            "⚠️ detektor o'rnatilmagan / не установлен / not installed — `python scripts/download_detector.py`"
+        )
+        return gallery, f"`#{study_id}` · {status}\n\n" + text, out
 
     def history(self):
         rows = self.db.list_studies()
@@ -125,6 +139,11 @@ def build(app: App) -> gr.Blocks:
                 with gr.Column(scale=1):
                     files = gr.File(label="Rasmlar / Снимки / Images (R-CC, R-MLO, L-CC, L-MLO)", file_count="multiple")
                     lang = gr.Dropdown(langs, value=settings.default_lang, label="Til / Язык / Language")
+                    split = gr.Radio(
+                        [("Avto / Авто / Auto", "auto"), ("Ha / Да / Yes", "yes"), ("Yo'q / Нет / No", "no")],
+                        value="auto",
+                        label="Bitta rasmda ikkala bez / Обе железы на одном снимке / Both breasts in one image",
+                    )
                     with gr.Accordion("Bemor / Пациент / Patient", open=False):
                         patient_id = gr.Textbox(label="ID")
                         patient_name = gr.Textbox(label="F.I.Sh. / ФИО / Name")
@@ -151,7 +170,9 @@ def build(app: App) -> gr.Blocks:
                         l_over = gr.Dropdown(cats, value="", label="BI-RADS L (override)")
                     run_btn = gr.Button("Tahlil qilish / Анализировать / Analyze", variant="primary")
                 with gr.Column(scale=2):
-                    gallery = gr.Gallery(label="Kesilgan rasmlar / Обработанные снимки", columns=4, height=260)
+                    gallery = gr.Gallery(
+                        label="Topilmalar aylana bilan / Находки обведены / Findings circled", columns=4, height=420
+                    )
                     report = gr.Markdown()
                     download = gr.File(label="Xulosa (.md)")
         with gr.Tab("Baza / База / Database"):
@@ -177,7 +198,7 @@ def build(app: App) -> gr.Blocks:
         clear_btn.click(lambda: ([], []), None, [findings, table])
         run_btn.click(
             app.run,
-            [files, lang, patient_id, patient_name, age, indication, comparison, r_over, l_over, findings],
+            [files, lang, split, patient_id, patient_name, age, indication, comparison, r_over, l_over, findings],
             [gallery, report, download],
         )
         refresh.click(app.history, None, hist)

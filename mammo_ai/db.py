@@ -74,17 +74,18 @@ class Database:
                 ),
             )
             study_id = cur.lastrowid
-            labels = [label for _, label in result.thumbnails]
-            for i, f in enumerate(files):
+            dest = self.files_dir / str(study_id)
+            for f in files:
                 stored = f
                 if keep_images:
-                    dest = self.files_dir / str(study_id)
                     dest.mkdir(parents=True, exist_ok=True)
                     stored = str(shutil.copy2(f, dest / Path(f).name))
-                c.execute(
-                    "INSERT INTO images (study_id, path, label) VALUES (?,?,?)",
-                    (study_id, stored, labels[i] if i < len(labels) else None),
-                )
+                c.execute("INSERT INTO images (study_id, path, label) VALUES (?,?,?)", (study_id, stored, "original"))
+            if keep_images:  # cropped images with detected lesions circled
+                for path, (_, label) in zip(result.save_annotated(str(dest)), result.thumbnails):
+                    c.execute(
+                        "INSERT INTO images (study_id, path, label) VALUES (?,?,?)", (study_id, path, f"annotated {label}")
+                    )
             for lang, text in reports.items():
                 c.execute("INSERT INTO reports (study_id, lang, text) VALUES (?,?,?)", (study_id, lang, text))
         return study_id

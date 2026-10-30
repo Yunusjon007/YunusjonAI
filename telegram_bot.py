@@ -20,6 +20,7 @@ from telethon import TelegramClient, events
 
 from mammo_ai.config import settings
 from mammo_ai.db import Database
+from mammo_ai.detection import load_detector
 from mammo_ai.models import load_backends
 from mammo_ai.pipeline import analyze
 from mammo_ai.report import available_languages, render
@@ -44,6 +45,7 @@ user_lang: dict[int, str] = {}
 work_dir = Path(tempfile.mkdtemp(prefix="mammo_bot_"))
 db = Database(settings.db_path)
 _backend = None
+_detector = "auto"
 
 
 def backend():
@@ -51,6 +53,13 @@ def backend():
     if _backend is None:
         _backend = load_backends(settings)
     return _backend
+
+
+def detector():
+    global _detector
+    if _detector == "auto":
+        _detector = load_detector(settings)
+    return _detector
 
 
 async def allowed(event) -> bool:
@@ -115,7 +124,7 @@ async def on_analyze(event):
     langs = available_languages() if lang == "all" else [lang]
     await event.reply("⏳ ...")
     try:
-        result = await asyncio.to_thread(analyze, files, backend())
+        result = await asyncio.to_thread(analyze, files, backend(), detector=detector())
     except Exception as exc:
         await event.reply(f"❌ {exc}")
         return
@@ -126,6 +135,8 @@ async def on_analyze(event):
             await event.respond(part)
     out = work_dir / f"mammo_report_{study_id}.md"
     out.write_text("\n\n---\n\n".join(reports.values()), encoding="utf-8")
+    images = result.save_annotated(str(work_dir / f"annotated_{study_id}"))
+    await event.respond(file=images, force_document=False)  # lesions circled in red
     await event.respond(file=str(out))
 
 

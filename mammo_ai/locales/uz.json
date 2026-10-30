@@ -2,7 +2,6 @@
   "lang_name": "O'zbekcha",
   "title": "MAMMOGRAFIYA XULOSASI",
   "draft_note": "Dastlabki xulosa sun'iy intellekt (SI) yordamida tayyorlandi. Rentgenolog shifokor tomonidan tekshirilishi va imzolanishi shart.",
-
   "section_patient": "Bemor va tekshiruv",
   "patient_id": "Bemor ID",
   "patient_name": "F.I.Sh.",
@@ -11,14 +10,11 @@
   "device": "Apparat",
   "indication": "Ko'rsatma",
   "indication_default": "Skrining mammografiya",
-
   "section_technique": "Tekshiruv usuli",
   "technique_text": "Raqamli mammografiya. Bajarilgan proyeksiyalar: {views}.",
   "views_unknown": "proyeksiyalar ko'rsatilmagan",
-
   "section_comparison": "Solishtirish",
   "comparison_none": "Solishtirish uchun oldingi tekshiruvlar taqdim etilmagan.",
-
   "section_composition": "Sut bezlari tuzilishi (ACR)",
   "density": {
     "A": "A — Sut bezlari deyarli to'liq yog' to'qimasidan iborat.",
@@ -28,10 +24,15 @@
   },
   "density_unknown": "Sut bezlari tuzilishini avtomatik baholab bo'lmadi.",
   "density_confidence": "model ishonchi {pct}%",
-
   "section_findings": "Tavsif",
-  "side": {"R": "O'ng sut bezi", "L": "Chap sut bezi"},
-  "side_short": {"R": "O'ngda", "L": "Chapda"},
+  "side": {
+    "R": "O'ng sut bezi",
+    "L": "Chap sut bezi"
+  },
+  "side_short": {
+    "R": "O'ngda",
+    "L": "Chapda"
+  },
   "ai_score": "SI bo'yicha xavfli o'sma ehtimoli bahosi: {score}% (shubha darajasi: {level}).",
   "level": {
     "low": "past",
@@ -47,7 +48,12 @@
   "not_examined": "Ushbu sut bezining tasvirlari taqdim etilmagan.",
   "radiologist_findings": "Rentgenolog tomonidan tavsiflangan o'zgarishlar:",
   "findings_need_category": "Tavsiflangan o'zgarishlarda shubhali belgilar bor, lekin taklif qilingan kategoriya 4 dan past. Yakuniy BI-RADS kategoriyasini rentgenolog shifokor belgilashi shart.",
-
+  "ai_findings": "SI tasvirlarda belgilagan topilmalar (qizil aylana bilan):",
+  "ai_finding_line": "{type} — ishonch {score}%{size}, tasvir {image}",
+  "ai_finding_size": ", o'lchami ≈ {size} mm",
+  "benign_mass_note": "Xavfli o'sma bahosi past bo'lgani holda hosila aniqlandi — ehtimol xavfsiz (masalan, fibroadenoma, kista). Agar u avvaldan ma'lum va barqaror bo'lsa, shifokor BI-RADS 2 ni, skriningda esa BI-RADS 0 (qo'shimcha tekshiruv) ni belgilashi mumkin.",
+  "detector_missing": "Hosila detektori o'rnatilmagan: model faqat xavfli o'sma ehtimolini baholaydi va xavfsiz hosilalarni (fibroadenoma, kista) ANIQLAMAYDI. 1, 2 yoki 3 kategoriyani rentgenolog shifokor tasdiqlashi shart.",
+  "split_note": "Ikkala sut bezi bitta tasvirda edi; tasvir o'rtadan avtomatik bo'lindi (chap yarmi — o'ng bez, o'ng yarmi — chap bez). Tekshirib ko'ring.",
   "section_impression": "Xulosa (BI-RADS kategoriyasi)",
   "overall": "Umumiy baho",
   "risk": "xavfli o'sma ehtimoli {risk}",
@@ -63,7 +69,6 @@
     "5": "Xavfli o'sma ehtimoli juda yuqori",
     "6": "Biopsiya bilan tasdiqlangan xavfli o'sma"
   },
-
   "section_recommendation": "Tavsiyalar",
   "rec": {
     "0": "Qo'shimcha tekshiruv: prisel (lokal kompression) / kattalashtirilgan mammografiya va/yoki sut bezlari UTT; mavjud bo'lsa, oldingi mammogrammalar bilan solishtirish.",
@@ -78,14 +83,12 @@
     "6": "Klinik ko'rsatmalarga ko'ra jarrohlik / maxsus davolash. Onkolog nazoratida olib borish."
   },
   "dense_note": "Sut bezlari zich bo'lgani sababli ({density} kategoriya) qo'shimcha UTT yoki MRT tekshiruvini ko'rib chiqish mumkin.",
-
   "section_ai": "Texnik ma'lumot",
   "models_used": "Qo'llanilgan SI modellari: {models}.",
   "threshold_note": "BI-RADS kategoriyasi SI bahosi asosida avtomatik taklif qilindi. Chegara qiymatlari klinik jihatdan tasdiqlanmagan va mahalliy ma'lumotlarda kalibrlanishi kerak.",
   "override_note": "BI-RADS kategoriyasi rentgenolog shifokor tomonidan belgilandi.",
   "disclaimer": "MUHIM: Ushbu dastur sertifikatlangan tibbiy buyum emas. Xulosa faqat qaror qabul qilishga yordam beruvchi qoralama hisoblanadi. Yakuniy tashxis va BI-RADS kategoriyasini rentgenolog shifokor belgilaydi.",
   "signature": "Rentgenolog shifokor: ______________________     Sana: ______________",
-
   "finding_type": {
     "mass": "Hajmli hosila",
     "calcifications": "Kalsinatlar",
@@ -93,7 +96,8 @@
     "distortion": "Arxitektonika buzilishi",
     "lymph_node": "Intramammar limfa tugun",
     "skin_lesion": "Teri hosilasi",
-    "dilated_duct": "Yakka kengaygan sut yo'li"
+    "dilated_duct": "Yakka kengaygan sut yo'li",
+    "ai_lesion": "O'choqli hosila (SI aniqladi, turi aniqlanmagan)"
   },
   "field": {
     "shape": "shakli",
@@ -111,7 +115,11 @@
   },
   "size_mm": "{size} mm",
   "clock_fmt": "soat {clock} da",
-  "shape": {"oval": "oval", "round": "dumaloq", "irregular": "noto'g'ri"},
+  "shape": {
+    "oval": "oval",
+    "round": "dumaloq",
+    "irregular": "noto'g'ri"
+  },
   "margin": {
     "circumscribed": "aniq (chegaralangan)",
     "obscured": "qisman yashiringan",
@@ -154,7 +162,11 @@
     "subareolar": "areola osti sohasi",
     "axillary_tail": "aksillyar o'simta (qo'ltiq osti qismi)"
   },
-  "depth": {"anterior": "oldingi uchdan bir", "middle": "o'rta uchdan bir", "posterior": "orqa uchdan bir"},
+  "depth": {
+    "anterior": "oldingi uchdan bir",
+    "middle": "o'rta uchdan bir",
+    "posterior": "orqa uchdan bir"
+  },
   "assoc": {
     "skin_retraction": "terining tortilishi",
     "nipple_retraction": "so'rg'ichning tortilishi",

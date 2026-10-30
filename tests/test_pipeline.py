@@ -178,6 +178,7 @@ def test_cli_writes_report_and_db(tmp_path, monkeypatch, capsys):
     from mammo_ai.config import settings
 
     monkeypatch.setattr(cli, "load_backends", lambda _: FakeBackend(cancer=0.25))
+    monkeypatch.setattr(cli, "load_detector", lambda _: None)
     monkeypatch.setattr(settings, "db_path", str(tmp_path / "cli.sqlite3"))
     out = tmp_path / "r.md"
     files = [write_png(tmp_path, "R_CC.png", "R"), write_png(tmp_path, "L_MLO.png", "L")]
@@ -186,3 +187,92 @@ def test_cli_writes_report_and_db(tmp_path, monkeypatch, capsys):
     assert "MAMMOGRAFIYA XULOSASI" in text and "ЗАКЛЮЧЕНИЕ МАММОГРАФИИ" in text and "MAMMOGRAPHY REPORT" in text
     assert "BI-RADS 4A" in text  # right: 25% -> 4A, overall = worst
     assert Database(settings.db_path).list_studies()[0]["left_birads"] == "2"
+
+
+# ---- lesion detector, two-breast images ----------------------------------------------------------
+from mammo_ai.detection import Detection, draw, finding_type  # noqa: E402
+from mammo_ai.imaging import shows_two_breasts, split_two_breasts  # noqa: E402
+
+
+class FakeDetector:
+    name = "fake-detector"
+
+    def __init__(self, boxes_for=None):
+        self.boxes_for = boxes_for or (lambda px: [])
+
+    def detect(self, pixels):
+        return self.boxes_for(pixels)
+
+
+def two_breast_png(tmp_path: Path) -> str:
+    """Back-to-back CC views like a teaching image: R on the viewer's left, L on the right."""
+    img = np.concatenate([breast_image("R"), breast_image("L")], axis=1)
+    img[:, :8] = img[:, -8:] = 0
+    p = tmp_path / "both.png"
+    Image.fromarray(img).save(p)
+    return str(p)
+
+
+def test_two_breasts_in_one_image_are_split(tmp_path):
+    path = two_breast_png(tmp_path)
+    img = load_image(path)
+    assert shows_two_breasts(img.pixels)
+    parts = split_two_breasts(img)
+    assert [p.laterality for p in parts] == ["R", "L"] and all(p.split_from_pair for p in parts)
+    assert not shows_two_breasts(breast_image("R"))  # a single breast is never split
+    assert split_two_breasts(img, force=False) == [img]
+
+    res = analyze([path], FakeBackend())
+    assert res.split and res.breasts["R"].views and res.breasts["L"].views
+    assert "split in the middle automatically" in render(res, "en")
+
+
+def test_detected_lesion_is_never_birads_1(tmp_path):
+    files = [write_png(tmp_path, "R_CC.png", "R"), write_png(tmp_path, "L_CC.png", "L")]
+    fa = Detection(100, 200, 160, 260, "mass", 0.81, "mass")
+    det = FakeDetector(lambda px: [fa] if px[:, : px.shape[1] // 2].mean() > px[:, px.shape[1] // 2 :].mean() else [])
+    res = analyze(files, FakeBackend(cancer=0.02), detector=det)
+    left, right = res.breasts["L"], res.breasts["R"]
+    assert left.birads == "3" and len(left.ai_findings) == 1  # low cancer score, but a mass is there
+    assert right.birads == "1" and not right.ai_findings
+    assert res.detector_used and "fake-detector" in res.models
+    text = render(res, "uz")
+    assert "qizil aylana" in text and "fibroadenoma" in text and "Hajmli hosila — ishonch 81%" in text
+    assert "Hosila detektori o'rnatilmagan" not in text
+
+    # circles are drawn on the left breast image only
+    rgb = {label: px for px, label in res.thumbnails}
+    l_img, r_img = rgb["L-CC"], rgb["R-CC"]
+    assert l_img.ndim == 3 and (l_img[..., 0].astype(int) - l_img[..., 1]).max() > 100
+    assert (r_img[..., 0].astype(int) - r_img[..., 1]).max() == 0
+    saved = res.save_annotated(str(tmp_path / "ann"))
+    assert len(saved) == 2 and all(Path(p).exists() for p in saved)
+
+
+def test_without_detector_low_score_warns(tmp_path):
+    res = analyze([write_png(tmp_path, "R_CC.png", "R")], FakeBackend(cancer=0.02))
+    assert res.breasts["R"].birads == "1" and not res.detector_used
+    for lang, phrase in (("uz", "ANIQLAMAYDI"), ("ru", "НЕ выявляет"), ("en", "does NOT detect")):
+        assert phrase in render(res, lang)
+
+
+def test_ai_finding_size_from_dicom_pixel_spacing(tmp_path):
+    path = write_dicom(tmp_path, "l.dcm", "L", "CC")
+    import pydicom
+
+    ds = pydicom.dcmread(path)
+    ds.ImagerPixelSpacing = [0.1, 0.1]
+    ds.save_as(path)
+    det = FakeDetector(lambda px: [Detection(10, 10, 160, 110, "mass", 0.9)])  # 150 px wide
+    res = analyze([path], FakeBackend(), detector=det)
+    assert res.breasts["L"].ai_findings[0].size_mm == "15"
+    assert "≈ 15 mm" in render(res, "en")
+
+
+def test_finding_type_mapping_and_draw():
+    assert finding_type("Mass") == "mass" and finding_type("Suspicious Calcification") == "calcifications"
+    assert finding_type("Focal Asymmetry") == "asymmetry" and finding_type("Architectural Distortion") == "distortion"
+    assert finding_type("tumor") == "mass" and finding_type("object") == "ai_lesion"
+    img = breast_image("L")
+    out = draw(img, [Detection(50, 50, 120, 120, "mass", 0.5)])
+    assert out.shape == (*img.shape, 3) and (out != np.repeat(img[..., None], 3, 2)).any()

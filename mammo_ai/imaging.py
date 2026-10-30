@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -20,6 +20,9 @@ class MammoImage:
     view: str | None = None  # "CC" | "MLO" | other DICOM ViewPosition
     laterality_estimated: bool = False
     meta: dict = field(default_factory=dict)
+    pixel_spacing: float | None = None  # mm per pixel (DICOM), None for PNG/JPG
+    split_from_pair: bool = False  # cut out of an image that showed both breasts
+    detections: list = field(default_factory=list)  # detection.Detection, in `pixels` coordinates
 
     @property
     def label(self) -> str:
@@ -81,7 +84,10 @@ def load_dicom(path: Path) -> MammoImage:
         "manufacturer": str(getattr(ds, "Manufacturer", "") or ""),
         "modality": str(getattr(ds, "Modality", "") or ""),
     }
-    return MammoImage(_to_uint8(arr), str(path), lat if lat in {"R", "L"} else None, view, meta=meta)
+    spacing = getattr(ds, "ImagerPixelSpacing", None) or getattr(ds, "PixelSpacing", None)
+    img = MammoImage(_to_uint8(arr), str(path), lat if lat in {"R", "L"} else None, view, meta=meta)
+    img.pixel_spacing = float(spacing[0]) if spacing else None
+    return img
 
 
 def load_raster(path: Path) -> MammoImage:
@@ -124,22 +130,64 @@ def load_image(path: str | Path) -> MammoImage:
     return img
 
 
-def crop_breast(pixels: np.ndarray, margin: int = 10) -> np.ndarray:
-    """Remove background and labels: keep the bounding box of the largest bright component."""
+def tissue_mask(pixels: np.ndarray) -> np.ndarray:
+    """Breast vs. background. Otsu alone can split dense from fatty tissue, so the threshold
+    is lowered well below it to keep grey fatty areas (where e.g. fibroadenomas sit)."""
     import cv2
 
+    blur = cv2.GaussianBlur(pixels, (5, 5), 0)
+    otsu, _ = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return (blur > max(10.0, 0.4 * otsu)).astype(np.uint8) * 255
+
+
+def crop_box(pixels: np.ndarray, margin: int = 10) -> tuple[int, int, int, int]:
+    """(x0, y0, x1, y1) of the breast: bounding box of the largest tissue component."""
+    import cv2
+
+    full = (0, 0, pixels.shape[1], pixels.shape[0])
     small_scale = 512 / max(pixels.shape)
     small = cv2.resize(pixels, None, fx=small_scale, fy=small_scale, interpolation=cv2.INTER_AREA)
-    blur = cv2.GaussianBlur(small, (5, 5), 0)
-    _, mask = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(mask)
+    n, _, stats, _ = cv2.connectedComponentsWithStats(tissue_mask(small))
     if n <= 1:
-        return pixels
+        return full
     idx = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
     x, y, w, h = stats[idx, :4]
     x0 = max(int(x / small_scale) - margin, 0)
     y0 = max(int(y / small_scale) - margin, 0)
     x1 = min(int((x + w) / small_scale) + margin, pixels.shape[1])
     y1 = min(int((y + h) / small_scale) + margin, pixels.shape[0])
-    crop = pixels[y0:y1, x0:x1]
-    return crop if crop.size > 0.05 * pixels.size else pixels
+    if (x1 - x0) * (y1 - y0) <= 0.05 * pixels.size:
+        return full
+    return x0, y0, x1, y1
+
+
+def crop_breast(pixels: np.ndarray, margin: int = 10) -> np.ndarray:
+    """Remove background and labels around the breast."""
+    x0, y0, x1, y1 = crop_box(pixels, margin)
+    return pixels[y0:y1, x0:x1]
+
+
+def shows_two_breasts(pixels: np.ndarray) -> bool:
+    """Both CC (or MLO) views side by side, chest walls touching in the middle (teaching images,
+    screenshots of a viewer). A single breast always has tissue at its chest-wall edge."""
+    h, w = pixels.shape
+    if w / h < 1.15:
+        return False
+    cols = (tissue_mask(pixels) > 0).mean(0)
+    edge = max(3, w // 40)
+    center = cols[w // 2 - edge : w // 2 + edge].mean()
+    return cols[:edge].mean() < 0.25 and cols[-edge:].mean() < 0.25 and center > 0.5
+
+
+def split_two_breasts(img: MammoImage, force: bool | None = None) -> list[MammoImage]:
+    """force: True = always split, False = never, None = detect automatically.
+    Standard hanging: right breast on the viewer's left, left breast on the viewer's right."""
+    if force is False or (force is None and not shows_two_breasts(img.pixels)):
+        return [img]
+    w = img.pixels.shape[1]
+    halves = [("R", img.pixels[:, : w // 2]), ("L", img.pixels[:, w // 2 :])]
+    return [
+        replace(img, pixels=np.ascontiguousarray(px), laterality=side, laterality_estimated=False,
+                split_from_pair=True, meta=dict(img.meta), detections=[])
+        for side, px in halves
+    ]

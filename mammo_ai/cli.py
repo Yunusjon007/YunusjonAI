@@ -6,6 +6,7 @@ import sys
 
 from .config import settings
 from .db import Database
+from .detection import load_detector
 from .models import load_backends
 from .pipeline import analyze
 from .report import available_languages, render, render_many
@@ -22,6 +23,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--right-birads", help="radiologist override for the right breast, e.g. 4B")
     ap.add_argument("--left-birads", help="radiologist override for the left breast")
     ap.add_argument("--no-db", action="store_true", help="do not save the study to the database")
+    ap.add_argument("--split", choices=["auto", "yes", "no"], default="auto",
+                    help="an image showing both breasts side by side is split into R and L")
+    ap.add_argument("--annotated-dir", help="save images with detected lesions circled into this folder")
     args = ap.parse_args(argv)
 
     langs = [x.strip() for x in args.lang.split(",") if x.strip()]
@@ -33,9 +37,14 @@ def main(argv: list[str] | None = None) -> int:
         patient={"patient_id": args.patient_id, "patient_age": args.age},
         overrides=overrides,
         indication=args.indication,
+        detector=load_detector(settings),
+        split_pairs={"auto": None, "yes": True, "no": False}[args.split],
     )
     reports = {lang: render(result, lang) for lang in langs}
     text = render_many(result, langs)
+    if args.annotated_dir:
+        for p in result.save_annotated(args.annotated_dir):
+            print(f"[annotated image: {p}]", file=sys.stderr)
     if args.out:
         with open(args.out, "w", encoding="utf-8") as f:
             f.write(text)
